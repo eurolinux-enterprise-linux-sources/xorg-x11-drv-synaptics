@@ -8,7 +8,7 @@
 Name:           xorg-x11-drv-synaptics
 Summary:        Xorg X11 Synaptics touchpad input driver
 Version:        1.6.2
-Release:        11%{?gitdate:.%{gitdate}git%{gitversion}}%{?dist}.1
+Release:        13%{?gitdate:.%{gitdate}git%{gitversion}}%{?dist}
 URL:            http://www.x.org
 License:        MIT
 Group:          User Interface/X Hardware Support
@@ -54,7 +54,7 @@ Requires:       libXi libXtst
 Provides:       synaptics = %{version}-%{release}
 Obsoletes:      synaptics < 0.15.0
 # Force a server that does scaling in the DIX
-Conflicts:      xorg-x11-server-Xorg <= 1.13.0-11.1.el6
+Conflicts:      xorg-x11-server-Xorg < 1.13.0-16
 
 %description
 This is the Synaptics touchpad driver for the X.Org X server. The following
@@ -157,9 +157,11 @@ Development files for the Synaptics TouchPad for X.Org.
 
 
 %changelog
-* Tue Oct 01 2013 Peter Hutterer <peter.hutterer@redhat.com> 1.6.2-10.1
-- Disable driver-based resolutions scaling on ABI 18.1 (#1012816)
-- Conflict with X server's that don't provide the proper scaling (#1012816)
+* Tue Jul 30 2013 Peter Hutterer <peter.hutterer@redhat.com> 1.6.2-13
+- Conflict with X server's that don't provide the proper scaling (#988174).
+
+* Thu Jul 25 2013 Peter Hutterer <peter.hutterer@redhat.com> 1.6.2-12
+- Disable driver-based resolutions scaling on ABI 18.1 (#988174)
 
 * Thu Nov 01 2012 Peter Hutterer <peter.hutterer@redhat.com> - 1.6.2-11
 - Fix {?dist} tag (#871446)
