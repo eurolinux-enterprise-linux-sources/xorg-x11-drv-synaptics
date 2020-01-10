@@ -7,8 +7,8 @@
 
 Name:           xorg-x11-drv-synaptics
 Summary:        Xorg X11 Synaptics touchpad input driver
-Version:        1.6.2
-Release:        13%{?gitdate:.%{gitdate}git%{gitversion}}%{?dist}
+Version:        1.7.6
+Release:        1%{?gitdate:.%{gitdate}git%{gitversion}}%{?dist}
 URL:            http://www.x.org
 License:        MIT
 Group:          User Interface/X Hardware Support
@@ -25,17 +25,8 @@ Source3:        10-synaptics.fdi
 
 # Revert new upstream defaults, they are behaviour changes.
 Patch001:       0001-Revert-Enable-coasting-by-default-with-a-value-of-20.patch
-Patch002:       0001-conf-apply-ClickPad-softbuttons-option-through-fdi-f.patch
-Patch004:       0001-Use-LogMessageVerbSigSafe-on-ABI-18.patch
-Patch005:       0001-Undefine-HAVE_SMOOTH_SCROLLING.patch
-
-# Memory corruption if fingers are still present on DeviceOff
-Patch006:       0001-Reset-num_active_touches-on-DeviceOff-52496.patch
-
-# Bug 988174 - synaptics needs to do conditional scaling based on resolution
-# From upstream, backported to ABI 18.1, needs server fix
-Patch007:       0001-Disable-driver-scaling-for-input-ABI-18.1.patch
-Patch008:       0002-eventcomm-conditionally-use-the-ABS_MT-resolutions.patch
+Patch002:       0002-eventcomm-conditionally-use-the-ABS_MT-resolutions.patch
+Patch003:       0003-eventcomm-define-the-EVIOCGPROP-ioctl-if-the-kernel-.patch
 
 ExcludeArch:    s390 s390x
 
@@ -98,11 +89,7 @@ Features:
 %setup -q -n %{tarball}-%{?gitdate:%{gitdate}}%{!?gitdate:%{version}}
 %patch001 -p1
 %patch002 -p1
-%patch004 -p1
-%patch005 -p1
-%patch006 -p1
-%patch007 -p1
-%patch008 -p1
+%patch003 -p1
 
 %build
 autoreconf -v --install --force || exit 1
@@ -153,10 +140,24 @@ Development files for the Synaptics TouchPad for X.Org.
 %{_libdir}/pkgconfig/xorg-synaptics.pc
 %dir %{_includedir}/xorg
 %{_includedir}/xorg/synaptics-properties.h
-%{_includedir}/xorg/synaptics.h
 
 
 %changelog
+* Tue May 13 2014 Peter Hutterer <peter.hutterer@redhat.com> 1.7.6-1
+- synaptics 1.7.6 (#1077486) 
+
+* Mon May 05 2014 Peter Hutterer <peter.hutterer@redhat.com> 1.7.5.901-2
+- Define the EVIOCGPROP ioctl, at least until the kernel provides it
+  (#1026577)
+
+* Mon May 05 2014 Peter Hutterer <peter.hutterer@redhat.com> 1.7.5.901-1
+- synaptics 1.7.5.901 (#1077486)
+- set secondary top buttons on INPUT_PROP_TOPBUTTONPAD (#1026577)
+- fix bogus changelog date
+
+* Wed Apr 23 2014 Adam Jackson <ajax@redhat.com> 1.7.1-1
+- synaptics 1.7.1
+
 * Tue Jul 30 2013 Peter Hutterer <peter.hutterer@redhat.com> 1.6.2-13
 - Conflict with X server's that don't provide the proper scaling (#988174).
 
@@ -353,7 +354,7 @@ Development files for the Synaptics TouchPad for X.Org.
 * Mon Aug 25 2008 Adel Gadllah <adel.gadllah@gmail.com> 0.15.0-2
 - Enable tapping RH #439386
 
-* Fri Aug 7 2008 Peter Hutterer <peter.hutterer@redhat.com> 0.15.0-1
+* Thu Aug 7 2008 Peter Hutterer <peter.hutterer@redhat.com> 0.15.0-1
 - Initial RPM release - this is the relicensed version of the old synaptics
   package.
 - Includes Changelog from synaptics package.

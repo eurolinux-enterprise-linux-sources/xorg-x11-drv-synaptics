@@ -1,7 +1,8 @@
-From c102d2e2f84cabc0592c91b3db0f9af686c137b4 Mon Sep 17 00:00:00 2001
+From 74c980a5c168d7b9d3c9916f6cf9022ae92ea48c Mon Sep 17 00:00:00 2001
 From: Peter Hutterer <peter.hutterer@who-t.net>
 Date: Thu, 25 Jul 2013 01:39:44 +1000
-Subject: [PATCH] eventcomm: conditionally use the ABS_MT resolutions
+Subject: [PATCH synaptics 2/3] eventcomm: conditionally use the ABS_MT
+ resolutions
 
 At least on some devices, the kernel doesn't give us ABS_MT_POSITION_X/Y
 resolutions, returning 0 instead. In the current code, this overwrites
@@ -9,14 +10,14 @@ the (correct) resolution from ABS_X/Y.
 
 Fix this, only overwrite the resolution if it's actually valid.
 ---
- src/eventcomm.c |   13 +++++++++++--
- 1 files changed, 11 insertions(+), 2 deletions(-)
+ src/eventcomm.c | 13 +++++++++++--
+ 1 file changed, 11 insertions(+), 2 deletions(-)
 
 diff --git a/src/eventcomm.c b/src/eventcomm.c
-index c65714f..d9391ad 100644
+index 20dbeea..9990688 100644
 --- a/src/eventcomm.c
 +++ b/src/eventcomm.c
-@@ -422,11 +422,20 @@ event_query_axis_ranges(InputInfoPtr pInfo)
+@@ -435,11 +435,20 @@ event_query_axis_ranges(InputInfoPtr pInfo)
          int st_maxx = priv->maxx;
          int st_miny = priv->miny;
          int st_maxy = priv->maxy;
@@ -40,5 +41,5 @@ index c65714f..d9391ad 100644
          proto_data->st_to_mt_offset[0] = priv->minx - st_minx;
          proto_data->st_to_mt_scale[0] =
 -- 
-1.7.1
+1.9.0
 
