@@ -1,8 +1,8 @@
-From 5e36e326b2c453d575bb99ce63a2fff20d370827 Mon Sep 17 00:00:00 2001
+From 6ec0d266dfa79139a7fa64eb732c25ebefc6b78d Mon Sep 17 00:00:00 2001
 From: Peter Hutterer <peter.hutterer@who-t.net>
 Date: Mon, 5 May 2014 11:33:04 +1000
-Subject: [PATCH synaptics 1/3] Revert "Enable coasting by default with a value
- of 20."
+Subject: [PATCH synaptics] Revert "Enable coasting by default with a value of
+ 20."
 
 This reverts commit 59151a548dcbac6f68e4f921b5c47aea4e5bc2a3.
 ---
@@ -10,10 +10,10 @@ This reverts commit 59151a548dcbac6f68e4f921b5c47aea4e5bc2a3.
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/src/synaptics.c b/src/synaptics.c
-index a8784f9..b1ba417 100644
+index 6f8889b..a9d4ef9 100644
 --- a/src/synaptics.c
 +++ b/src/synaptics.c
-@@ -732,7 +732,7 @@ set_default_parameters(InputInfoPtr pInfo)
+@@ -747,7 +747,7 @@ set_default_parameters(InputInfoPtr pInfo)
      pars->max_speed = xf86SetRealOption(opts, "MaxSpeed", 0.7);
      pars->accl = xf86SetRealOption(opts, "AccelFactor", accelFactor);
      pars->scroll_dist_circ = xf86SetRealOption(opts, "CircScrollDelta", 0.1);
@@ -23,5 +23,5 @@ index a8784f9..b1ba417 100644
      pars->press_motion_min_factor =
          xf86SetRealOption(opts, "PressureMotionMinFactor", 1.0);
 -- 
-1.9.0
+2.5.0
 

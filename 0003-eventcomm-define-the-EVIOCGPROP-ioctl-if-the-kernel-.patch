@@ -1,7 +1,7 @@
-From c1fa677618bd08f8dd7a30652967cd8318e33aa7 Mon Sep 17 00:00:00 2001
+From 02b49d570f7aa0eb3202cd590d5d678916ca48a9 Mon Sep 17 00:00:00 2001
 From: Peter Hutterer <peter.hutterer@who-t.net>
 Date: Mon, 5 May 2014 13:31:05 +1000
-Subject: [PATCH synaptics 3/3] eventcomm: define the EVIOCGPROP ioctl if the
+Subject: [PATCH synaptics] eventcomm: define the EVIOCGPROP ioctl if the
  kernel doesn't provide it
 
 Saves us rebuilding the driver when the ioctl becomes available in the next
@@ -13,12 +13,12 @@ Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
  1 file changed, 4 insertions(+)
 
 diff --git a/src/eventcomm.c b/src/eventcomm.c
-index 9990688..c9c8347 100644
+index 5f55141..f6770d5 100644
 --- a/src/eventcomm.c
 +++ b/src/eventcomm.c
-@@ -44,6 +44,10 @@
+@@ -45,6 +45,10 @@
  #include <xf86.h>
- #include <mtdev.h>
+ #include <libevdev/libevdev.h>
  
 +#ifndef EVIOCGPROP
 +#define EVIOCGPROP(len)         _IOC(_IOC_READ, 'E', 0x09, len)
@@ -28,5 +28,5 @@ index 9990688..c9c8347 100644
  #define INPUT_PROP_BUTTONPAD 0x02
  #endif
 -- 
-1.9.0
+2.5.0
 

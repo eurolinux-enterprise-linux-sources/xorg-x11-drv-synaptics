@@ -7,7 +7,7 @@
 
 Name:           xorg-x11-drv-synaptics
 Summary:        Xorg X11 Synaptics touchpad input driver
-Version:        1.7.6
+Version:        1.8.3
 Release:        1%{?gitdate:.%{gitdate}git%{gitversion}}%{?dist}
 URL:            http://www.x.org
 License:        MIT
@@ -34,12 +34,12 @@ BuildRequires:  libtool pkgconfig autoconf automake
 BuildRequires:  xorg-x11-server-sdk >= 1.10.99.902
 BuildRequires:  libX11-devel libXi-devel libXtst-devel
 BuildRequires:  xorg-x11-util-macros >= 1.8.0
-BuildRequires:  mtdev-devel
+BuildRequires:  mtdev-devel libevdev-devel
 
 Requires:       Xorg %(xserver-sdk-abi-requires ansic)
 Requires:       Xorg %(xserver-sdk-abi-requires xinput)
 Requires:       hal
-Requires:       mtdev
+Requires:       mtdev libevdev
 Requires:       libXi libXtst
 
 Provides:       synaptics = %{version}-%{release}
@@ -143,6 +143,12 @@ Development files for the Synaptics TouchPad for X.Org.
 
 
 %changelog
+* Wed Nov 25 2015 Peter Hutterer <peter.hutterer@redhat.com> 1.8.3-1
+- synaptics 1.8.3 (#1248610)
+
+* Wed Nov 11 2015 Adam Jackson <ajax@redhat.com> 1.7.6-2
+- Rebuild for server 1.17
+
 * Tue May 13 2014 Peter Hutterer <peter.hutterer@redhat.com> 1.7.6-1
 - synaptics 1.7.6 (#1077486) 
 
