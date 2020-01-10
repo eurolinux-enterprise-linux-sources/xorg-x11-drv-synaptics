@@ -1,0 +1,27 @@
+From 8de55e08f518df8d026795c81c363c4881abcad2 Mon Sep 17 00:00:00 2001
+From: Peter Hutterer <peter.hutterer@who-t.net>
+Date: Sun, 5 Aug 2012 14:40:10 +1000
+Subject: [PATCH synaptics] Revert "Enable coasting by default with a value of
+ 20."
+
+This reverts commit 59151a548dcbac6f68e4f921b5c47aea4e5bc2a3.
+---
+ src/synaptics.c |    2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/synaptics.c b/src/synaptics.c
+index cd9f936..bf1b73b 100644
+--- a/src/synaptics.c
++++ b/src/synaptics.c
+@@ -793,7 +793,7 @@ set_default_parameters(InputInfoPtr pInfo)
+     pars->accl = xf86SetRealOption(opts, "AccelFactor", accelFactor);
+     pars->trackstick_speed = xf86SetRealOption(opts, "TrackstickSpeed", 40);
+     pars->scroll_dist_circ = xf86SetRealOption(opts, "CircScrollDelta", 0.1);
+-    pars->coasting_speed = xf86SetRealOption(opts, "CoastingSpeed", 20.0);
++    pars->coasting_speed = xf86SetRealOption(opts, "CoastingSpeed", 0.0);
+     pars->coasting_friction = xf86SetRealOption(opts, "CoastingFriction", 50);
+     pars->press_motion_min_factor =
+         xf86SetRealOption(opts, "PressureMotionMinFactor", 1.0);
+-- 
+1.7.10.4
+

@@ -1,0 +1,54 @@
+From ff7195c64f9e278ae1185ce6fd13d93f899f2f60 Mon Sep 17 00:00:00 2001
+From: Peter Hutterer <peter.hutterer@who-t.net>
+Date: Thu, 30 Aug 2012 16:38:38 +1000
+Subject: [PATCH synaptics] Reset num_active_touches on DeviceOff (#52496)
+
+When disabling the device, reset num_active_touches to zero. Otherwise,
+num_active_touches stays at the value it was on DeviceOff(). Future touches
+add to that value until the index may go past priv->open_slots[].
+That causes spurious memory corruption on touch ends.
+
+And as of 55fc42e7c9b4948cadd4f98ef7b6a3b12e268e3e we ignore pre-existing
+touches anyway.
+
+Test-case:
+- place num_touches fingers on the touchpad
+- xinput disable <device>
+- lift fingers
+- xinput enable <device>
+- place finger on device, num_active_touches is now (num_touches + 1)
+
+X.Org Bug 52496 <http://bugs.freedesktop.org/show_bug.cgi?id=52496>
+
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+(cherry picked from commit 7fae54967888ab06049c23eb1a35c2915160982b)
+
+Conflicts:
+	src/synaptics.c
+---
+ src/synaptics.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/synaptics.c b/src/synaptics.c
+index 2ba6aaf..dcb0f3e 100644
+--- a/src/synaptics.c
++++ b/src/synaptics.c
+@@ -1154,6 +1154,7 @@ SynapticsReset(SynapticsPrivate * priv)
+     priv->prev_z = 0;
+     priv->prevFingers = 0;
+ #ifdef HAVE_MULTITOUCH
++    priv->num_active_touches = 0;
+     memset(priv->open_slots, 0, priv->num_slots * sizeof(int));
+ #endif
+ }
+@@ -3118,6 +3119,7 @@ UpdateTouchState(InputInfoPtr pInfo, struct SynapticsHwState *hw)
+         if (hw->slot_state[i] == SLOTSTATE_OPEN) {
+             priv->open_slots[priv->num_active_touches] = i;
+             priv->num_active_touches++;
++            BUG_WARN(priv->num_active_touches > priv->num_slots);
+         }
+         else if (hw->slot_state[i] == SLOTSTATE_CLOSE) {
+             Bool found = FALSE;
+-- 
+1.7.11.2
+
