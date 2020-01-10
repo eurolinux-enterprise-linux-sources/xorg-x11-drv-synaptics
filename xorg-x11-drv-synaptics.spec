@@ -8,7 +8,7 @@
 Name:           xorg-x11-drv-synaptics
 Summary:        Xorg X11 Synaptics touchpad input driver
 Version:        1.6.2
-Release:        11%{?gitdate:.%{gitdate}git%{gitversion}}%{?dist}
+Release:        11%{?gitdate:.%{gitdate}git%{gitversion}}%{?dist}.1
 URL:            http://www.x.org
 License:        MIT
 Group:          User Interface/X Hardware Support
@@ -32,6 +32,11 @@ Patch005:       0001-Undefine-HAVE_SMOOTH_SCROLLING.patch
 # Memory corruption if fingers are still present on DeviceOff
 Patch006:       0001-Reset-num_active_touches-on-DeviceOff-52496.patch
 
+# Bug 988174 - synaptics needs to do conditional scaling based on resolution
+# From upstream, backported to ABI 18.1, needs server fix
+Patch007:       0001-Disable-driver-scaling-for-input-ABI-18.1.patch
+Patch008:       0002-eventcomm-conditionally-use-the-ABS_MT-resolutions.patch
+
 ExcludeArch:    s390 s390x
 
 BuildRequires:  libtool pkgconfig autoconf automake
@@ -48,7 +53,8 @@ Requires:       libXi libXtst
 
 Provides:       synaptics = %{version}-%{release}
 Obsoletes:      synaptics < 0.15.0
-
+# Force a server that does scaling in the DIX
+Conflicts:      xorg-x11-server-Xorg <= 1.13.0-11.1.el6
 
 %description
 This is the Synaptics touchpad driver for the X.Org X server. The following
@@ -95,6 +101,8 @@ Features:
 %patch004 -p1
 %patch005 -p1
 %patch006 -p1
+%patch007 -p1
+%patch008 -p1
 
 %build
 autoreconf -v --install --force || exit 1
@@ -149,6 +157,10 @@ Development files for the Synaptics TouchPad for X.Org.
 
 
 %changelog
+* Tue Oct 01 2013 Peter Hutterer <peter.hutterer@redhat.com> 1.6.2-10.1
+- Disable driver-based resolutions scaling on ABI 18.1 (#1012816)
+- Conflict with X server's that don't provide the proper scaling (#1012816)
+
 * Thu Nov 01 2012 Peter Hutterer <peter.hutterer@redhat.com> - 1.6.2-11
 - Fix {?dist} tag (#871446)
 

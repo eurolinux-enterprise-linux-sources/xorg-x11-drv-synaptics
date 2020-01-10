@@ -1,0 +1,44 @@
+From c102d2e2f84cabc0592c91b3db0f9af686c137b4 Mon Sep 17 00:00:00 2001
+From: Peter Hutterer <peter.hutterer@who-t.net>
+Date: Thu, 25 Jul 2013 01:39:44 +1000
+Subject: [PATCH] eventcomm: conditionally use the ABS_MT resolutions
+
+At least on some devices, the kernel doesn't give us ABS_MT_POSITION_X/Y
+resolutions, returning 0 instead. In the current code, this overwrites
+the (correct) resolution from ABS_X/Y.
+
+Fix this, only overwrite the resolution if it's actually valid.
+---
+ src/eventcomm.c |   13 +++++++++++--
+ 1 files changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/src/eventcomm.c b/src/eventcomm.c
+index c65714f..d9391ad 100644
+--- a/src/eventcomm.c
++++ b/src/eventcomm.c
+@@ -422,11 +422,20 @@ event_query_axis_ranges(InputInfoPtr pInfo)
+         int st_maxx = priv->maxx;
+         int st_miny = priv->miny;
+         int st_maxy = priv->maxy;
++        int resx, resy;
+ 
+         event_get_abs(pInfo, pInfo->fd, ABS_MT_POSITION_X, &priv->minx,
+-                      &priv->maxx, &priv->synpara.hyst_x, &priv->resx);
++                      &priv->maxx, &priv->synpara.hyst_x, &resx);
+         event_get_abs(pInfo, pInfo->fd, ABS_MT_POSITION_Y, &priv->miny,
+-                      &priv->maxy, &priv->synpara.hyst_y, &priv->resy);
++                      &priv->maxy, &priv->synpara.hyst_y, &resy);
++
++        /* RHEL6: we get the correct resolution for ABS_X/Y but not for
++         * ABS_MT_POSITION_X/Y. Assume they have the same resolution, unless
++         * they're explicitly different */
++        if (resx != 0 && resx != priv->resx)
++                priv->resx = resx;
++        if (resy != 0 && resy != priv->resy)
++                priv->resy = resy;
+ 
+         proto_data->st_to_mt_offset[0] = priv->minx - st_minx;
+         proto_data->st_to_mt_scale[0] =
+-- 
+1.7.1
+
