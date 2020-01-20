@@ -1,0 +1,107 @@
+From 37afc8ee5640e22d6eab5379ee97ded8ad680aaf Mon Sep 17 00:00:00 2001
+From: Hans de Goede <hdegoede@redhat.com>
+Date: Fri, 21 Feb 2014 10:31:39 +0100
+Subject: [PATCH synaptics 04/14] Add an enum for the different
+ soft_button_areas
+
+While at it also move the enum for the soft button edges out of
+is_inside_button_area() so that it can be used elsewhere too.
+
+Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+(cherry picked from commit 840670508e0150ae11ae744c676253c7fba332dc)
+(cherry picked from commit 59bb2aaaac728bfbf92600314782ff2db506c91e)
+---
+ src/synaptics.c | 35 ++++++++++++++++++++++-------------
+ 1 file changed, 22 insertions(+), 13 deletions(-)
+
+diff --git a/src/synaptics.c b/src/synaptics.c
+index 7405194..7ba8b0f 100644
+--- a/src/synaptics.c
++++ b/src/synaptics.c
+@@ -89,6 +89,22 @@ enum EdgeType {
+     LEFT_TOP_EDGE = TOP_EDGE | LEFT_EDGE
+ };
+ 
++enum SoftButtonAreas {
++    BOTTOM_BUTTON_AREA = 0,
++    BOTTOM_RIGHT_BUTTON_AREA = 0,
++    BOTTOM_MIDDLE_BUTTON_AREA = 1,
++    TOP_BUTTON_AREA = 2,
++    TOP_RIGHT_BUTTON_AREA = 2,
++    TOP_MIDDLE_BUTTON_AREA = 3
++};
++
++enum SoftButtonAreaEdges {
++    LEFT = 0,
++    RIGHT = 1,
++    TOP = 2,
++    BOTTOM = 3
++};
++
+ /*
+  * We expect to be receiving a steady 80 packets/sec (which gives 40
+  * reports/sec with more than one finger on the pad, as Advanced Gesture Mode
+@@ -529,13 +545,13 @@ set_softbutton_areas_option(InputInfoPtr pInfo, char *option_name, int offset)
+ static void
+ set_primary_softbutton_areas_option(InputInfoPtr pInfo)
+ {
+-	set_softbutton_areas_option(pInfo, "SoftButtonAreas", 0);
++    set_softbutton_areas_option(pInfo, "SoftButtonAreas", BOTTOM_BUTTON_AREA);
+ }
+ 
+ static void
+ set_secondary_softbutton_areas_option(InputInfoPtr pInfo)
+ {
+-	set_softbutton_areas_option(pInfo, "SecondarySoftButtonAreas", 2);
++    set_softbutton_areas_option(pInfo, "SecondarySoftButtonAreas", TOP_BUTTON_AREA);
+ }
+ 
+ static void
+@@ -1401,13 +1417,6 @@ is_inside_button_area(SynapticsParameters * para, int which, int x, int y)
+ {
+     Bool inside_area = TRUE;
+ 
+-    enum {
+-        LEFT = 0,
+-        RIGHT = 1,
+-        TOP = 2,
+-        BOTTOM = 3
+-    };
+-
+     if (para->softbutton_areas[which][LEFT] == 0 &&
+         para->softbutton_areas[which][RIGHT] == 0 &&
+         para->softbutton_areas[which][TOP] == 0 &&
+@@ -1433,25 +1442,25 @@ is_inside_button_area(SynapticsParameters * para, int which, int x, int y)
+ static Bool
+ is_inside_rightbutton_area(SynapticsParameters * para, int x, int y)
+ {
+-    return is_inside_button_area(para, 0, x, y);
++    return is_inside_button_area(para, BOTTOM_RIGHT_BUTTON_AREA, x, y);
+ }
+ 
+ static Bool
+ is_inside_middlebutton_area(SynapticsParameters * para, int x, int y)
+ {
+-    return is_inside_button_area(para, 1, x, y);
++    return is_inside_button_area(para, BOTTOM_MIDDLE_BUTTON_AREA, x, y);
+ }
+ 
+ static Bool
+ is_inside_sec_rightbutton_area(SynapticsParameters * para, int x, int y)
+ {
+-    return is_inside_button_area(para, 2, x, y);
++    return is_inside_button_area(para, TOP_RIGHT_BUTTON_AREA, x, y);
+ }
+ 
+ static Bool
+ is_inside_sec_middlebutton_area(SynapticsParameters * para, int x, int y)
+ {
+-    return is_inside_button_area(para, 3, x, y);
++    return is_inside_button_area(para, TOP_MIDDLE_BUTTON_AREA, x, y);
+ }
+ 
+ static CARD32
+-- 
+1.9.3
+

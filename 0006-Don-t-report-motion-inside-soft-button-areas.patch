@@ -1,0 +1,155 @@
+From c0b19a1469a3f2ad4dd3a8a5ef1bebef59e5b4be Mon Sep 17 00:00:00 2001
+From: Hans de Goede <hdegoede@redhat.com>
+Date: Fri, 21 Feb 2014 10:31:41 +0100
+Subject: [PATCH synaptics 06/14] Don't report motion inside soft-button areas
+
+Unless the motion has started outside the soft-button area.
+
+Note that we must start reporting motions regardless of whether we think we're
+in the button area or not as soon as we've switched to using cumulative
+coordinates, since then the coordinates are no longer absolute.
+
+This fixes the reporting of unintended motion just before a click in a soft
+button area which sometimes causes mis-clicks.
+
+Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+(cherry picked from commit 3adaf4623845dce54129b6474f4f8f2966f9bc47)
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+Conflicts:
+	src/synaptics.c
+
+(cherry picked from commit 6d6bfcbf8763d967b8f3805cfe035324aba53e77)
+---
+ src/synaptics.c    | 66 +++++++++++++++++++++++++++++++++++++++++++++++++++++-
+ src/synapticsstr.h |  1 +
+ 2 files changed, 66 insertions(+), 1 deletion(-)
+
+diff --git a/src/synaptics.c b/src/synaptics.c
+index 5a2c160..d24dda8 100644
+--- a/src/synaptics.c
++++ b/src/synaptics.c
+@@ -1012,6 +1012,7 @@ SynapticsReset(SynapticsPrivate * priv)
+     priv->count_packet_finger = 0;
+     priv->finger_state = FS_UNTOUCHED;
+     priv->last_motion_millis = 0;
++    priv->inside_button_area = FALSE;
+     priv->tap_state = TS_START;
+     priv->tap_button = 0;
+     priv->tap_button_state = TBS_BUTTON_UP;
+@@ -1457,6 +1458,56 @@ is_inside_sec_middlebutton_area(SynapticsParameters * para, int x, int y)
+     return is_inside_button_area(para, TOP_MIDDLE_BUTTON_AREA, x, y);
+ }
+ 
++static Bool
++is_inside_top_or_bottom_button_area(SynapticsParameters * para, int offset,
++                                    int x, int y)
++{
++    Bool inside_area = TRUE;
++    Bool right_valid, middle_valid;
++    int top, bottom;
++
++    /* We don't have a left button area, so we only check the y axis */
++    right_valid = para->softbutton_areas[offset][TOP] ||
++                  para->softbutton_areas[offset][BOTTOM];
++    middle_valid = para->softbutton_areas[offset + 1][TOP] ||
++                   para->softbutton_areas[offset + 1][BOTTOM];
++
++    if (!right_valid && !middle_valid)
++        return FALSE;
++
++    /* Check both buttons are horizontally aligned */
++    if (right_valid && middle_valid && (
++            para->softbutton_areas[offset][TOP] !=
++                para->softbutton_areas[offset + 1][TOP] ||
++            para->softbutton_areas[offset][BOTTOM] !=
++                para->softbutton_areas[offset + 1][BOTTOM]))
++        return FALSE;
++
++    if (right_valid) {
++        top    = para->softbutton_areas[offset][TOP];
++        bottom = para->softbutton_areas[offset][BOTTOM];
++    }
++    else {
++        top    = para->softbutton_areas[offset + 1][TOP];
++        bottom = para->softbutton_areas[offset + 1][BOTTOM];
++    }
++
++    if (top && y < top)
++        inside_area = FALSE;
++    else if (bottom && y > bottom)
++        inside_area = FALSE;
++
++    return inside_area;
++}
++
++static Bool
++is_inside_anybutton_area(SynapticsParameters * para, int x, int y)
++{
++    return
++        is_inside_top_or_bottom_button_area(para, BOTTOM_BUTTON_AREA, x, y) ||
++        is_inside_top_or_bottom_button_area(para, TOP_BUTTON_AREA, x, y);
++}
++
+ static CARD32
+ timerFunc(OsTimerPtr timer, CARD32 now, pointer arg)
+ {
+@@ -2832,6 +2883,8 @@ HandleState(InputInfoPtr pInfo, struct SynapticsHwState *hw, CARD32 now,
+     int delay = 1000000000;
+     int timeleft;
+     Bool inside_active_area;
++    Bool using_cumulative_coords = FALSE;
++    Bool ignore_motion;
+ 
+     /* If touchpad is switched off, we skip the whole thing and return delay */
+     if (para->touchpad_off == TOUCHPAD_OFF) {
+@@ -2857,6 +2910,7 @@ HandleState(InputInfoPtr pInfo, struct SynapticsHwState *hw, CARD32 now,
+     if (para->clickpad && (hw->left || hw->right || hw->middle)) {
+         hw->x = hw->cumulative_dx;
+         hw->y = hw->cumulative_dy;
++        using_cumulative_coords = TRUE;
+     }
+ 
+     /* apply hysteresis before doing anything serious. This cancels
+@@ -2866,6 +2920,16 @@ HandleState(InputInfoPtr pInfo, struct SynapticsHwState *hw, CARD32 now,
+ 
+     inside_active_area = is_inside_active_area(priv, hw->x, hw->y);
+ 
++    /* Ignore motion *starting* inside softbuttonareas */
++    if (priv->finger_state < FS_TOUCHED)
++        priv->inside_button_area = is_inside_anybutton_area(para, hw->x, hw->y);
++    /* If we already have a finger down, clear inside_button_area if it goes
++       outside of the softbuttonareas */
++    else if (priv->inside_button_area && !is_inside_anybutton_area(para, hw->x, hw->y))
++        priv->inside_button_area = FALSE;
++
++    ignore_motion = !using_cumulative_coords && priv->inside_button_area;
++
+     /* these two just update hw->left, right, etc. */
+     update_hw_button_state(pInfo, hw, now, &delay);
+ 
+@@ -2935,7 +2999,7 @@ HandleState(InputInfoPtr pInfo, struct SynapticsHwState *hw, CARD32 now,
+     }
+ 
+     /* Post events */
+-    if (finger >= FS_TOUCHED && (dx || dy))
++    if (finger >= FS_TOUCHED && (dx || dy) && !ignore_motion)
+         xf86PostMotionEvent(pInfo->dev, 0, 0, 2, dx, dy);
+ 
+     if (priv->mid_emu_state == MBE_LEFT_CLICK) {
+diff --git a/src/synapticsstr.h b/src/synapticsstr.h
+index a028b20..1c5d573 100644
+--- a/src/synapticsstr.h
++++ b/src/synapticsstr.h
+@@ -236,6 +236,7 @@ struct _SynapticsPrivateRec {
+     Bool prev_up;               /* Previous up button value, for double click emulation */
+     enum FingerState finger_state;      /* previous finger state */
+     CARD32 last_motion_millis;  /* time of the last motion */
++    Bool inside_button_area;    /* Inside button area (ignore motion) */
+ 
+     enum TapState tap_state;    /* State of tap processing */
+     int tap_max_fingers;        /* Max number of fingers seen since entering start state */
+-- 
+1.9.3
+

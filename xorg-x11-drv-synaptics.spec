@@ -7,8 +7,8 @@
 
 Name:           xorg-x11-drv-synaptics
 Summary:        Xorg X11 Synaptics touchpad input driver
-Version:        1.9.0
-Release:        2%{?gitdate:.%{gitdate}git%{gitversion}}%{?dist}
+Version:        1.7.1
+Release:        10%{?gitdate:.%{gitdate}git%{gitversion}}%{?dist}.1
 URL:            http://www.x.org
 License:        MIT
 Group:          User Interface/X Hardware Support
@@ -23,7 +23,24 @@ Source0:        ftp://ftp.x.org/pub/individual/driver/%{tarball}-%{version}.tar.
 Source3:        50-synaptics.conf
 Source4:        70-touchpad-quirks.rules
 
-Patch01:        0001-eventcomm-if-we-get-a-read-error-other-than-EAGAIN-r.patch
+Patch01:        0001-Disable-driver-scaling-for-input-ABI-19.2.patch
+Patch02:        0001-Fix-ABI-detection-for-in-driver-scaling.patch
+
+# Bug 1093050 - Improve Responsiveness on Touchpads for Lenovo T440s/T540p/etc
+Patch04:        0001-Avoid-erroneously-handling-two-touchpoints-in-the-sa.patch
+Patch05:        0002-Allow-using-the-entire-touchpad-for-motions-started-.patch
+Patch06:        0003-Add-secondary-top-software-buttons-area.patch
+Patch07:        0004-Add-an-enum-for-the-different-soft_button_areas.patch
+Patch08:        0005-Get-rid-of-old_hw_state.patch
+Patch09:        0006-Don-t-report-motion-inside-soft-button-areas.patch
+Patch10:        0007-Ignore-motion-the-first-X-ms-after-a-clickpad-click.patch
+Patch11:        0008-On-button-down-update-cumulative-to-current-x-and-y-.patch
+Patch12:        0009-Wait-for-new-coordinates-on-a-clickpad-click-before-.patch
+Patch13:        0010-Add-property-support-for-secondary-top-software-butt.patch
+Patch14:        0011-Replace-is_inside_anybutton_area-with-current_button.patch
+Patch15:        0012-Don-t-allow-any-type-of-movement-starting-in-the-top.patch
+Patch16:        0013-If-the-touchpad-is-in-TOUCHPAD_OFF-mode-allow-physic.patch
+Patch17:        0014-Add-support-for-INPUT_PROP_TOPBUTTONPAD.patch
 
 ExcludeArch:    s390 s390x
 
@@ -31,11 +48,11 @@ BuildRequires:  autoconf automake libtool pkgconfig
 BuildRequires:  xorg-x11-server-devel >= 1.10.99.902
 BuildRequires:  libX11-devel libXi-devel libXtst-devel
 BuildRequires:  xorg-x11-util-macros >= 1.8.0
-BuildRequires:  libevdev-devel
+BuildRequires:  mtdev-devel
 
 Requires:       Xorg %(xserver-sdk-abi-requires ansic)
 Requires:       Xorg %(xserver-sdk-abi-requires xinput)
-Requires:       libevdev
+Requires:       mtdev
 Requires:       libXi libXtst
 
 Provides:       synaptics = %{version}-%{release}
@@ -82,7 +99,22 @@ Features:
 
 %prep
 %setup -q -n %{tarball}-%{?gitdate:%{gitdate}}%{!?gitdate:%{version}}
-%patch01 -p1 
+%patch01 -p1
+%patch02 -p1
+%patch04 -p1
+%patch05 -p1
+%patch06 -p1
+%patch07 -p1
+%patch08 -p1
+%patch09 -p1
+%patch10 -p1
+%patch11 -p1
+%patch12 -p1
+%patch13 -p1
+%patch14 -p1
+%patch15 -p1
+%patch16 -p1
+%patch17 -p1
 
 %build
 autoreconf -v --install --force || exit 1
@@ -97,9 +129,6 @@ make install DESTDIR=$RPM_BUILD_ROOT
 # FIXME: Remove all libtool archives (*.la) from modules directory.  This
 # should be fixed in upstream Makefile.am or whatever.
 find $RPM_BUILD_ROOT -regex ".*\.la$" | xargs rm -f --
-
-# we keep shipping our own config file
-rm -f $RPM_BUILD_ROOT%{_datadir}/X11/xorg.conf.d/70-synaptics.conf
 
 install -d $RPM_BUILD_ROOT%{_datadir}/X11/xorg.conf.d
 install -m 0644 %{SOURCE3} $RPM_BUILD_ROOT%{_datadir}/X11/xorg.conf.d/50-synaptics.conf
@@ -141,23 +170,8 @@ Development files for the Synaptics TouchPad for X.Org.
 
 
 %changelog
-* Tue May 15 2018 Peter Hutterer <peter.hutterer@redhat.com> 1.9.0-2
-- Fix infinite log spam in case of read errors (#1564624).
-
-* Fri Jan 27 2017 Peter Hutterer <peter.hutterer@redhat.com> 1.9.0-1
-- synaptics 1.9.0 (#1401659)
-
-* Fri May 01 2015 Peter Hutterer <peter.hutterer@redhat.com> 1.8.2-1
-- synaptics 1.8.2 (#1194883)
-
-* Wed Sep 10 2014 Peter Hutterer <peter.hutterer@redhat.com> 1.7.1-13
-- Avoid click delays when clocks drift apart (#1138484)
-
-* Thu Aug 14 2014 Peter Hutterer <peter.hutterer@redhat.com> 1.7.1-12
-- Fix 3-finger click on clickpads (#1123297)
-
-* Thu Jul 17 2014 Peter Hutterer <peter.hutterer@redhat.com> 1.7.1-11
-- Add support for secondary software button areas (#1093050)
+* Wed Jul 23 2014 Peter Hutterer <peter.hutterer@redhat.com> 1.7.1-10.1
+- Add support for secondary software button areas (#1122130)
 
 * Wed Jan 15 2014 Adam Jackson <ajax@redhat.com> - 1.7.1-10
 - 1.15 ABI rebuild

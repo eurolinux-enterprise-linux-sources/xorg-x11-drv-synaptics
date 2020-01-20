@@ -1,0 +1,198 @@
+From e5539482f204cfa8cd053a1afed05a622f7f03dc Mon Sep 17 00:00:00 2001
+From: Hans de Goede <hdegoede@redhat.com>
+Date: Tue, 22 Apr 2014 18:58:11 +0200
+Subject: [PATCH synaptics 14/14] Add support for INPUT_PROP_TOPBUTTONPAD
+
+Add a HasSecondaryButtons boolean config option which defaults to true for
+devices with the INPUT_PROP_TOPBUTTONPAD and false for all other devices.
+
+Only parse the SecondarySoftButtonAreas when this option is true, effectively
+disabling the top buttons when it is false. Likewise, only initialize the
+SecondarySoftButtonAreas property if we enable support for it.
+
+This means that it is now safe to always set a SecondarySoftButtonAreas
+default in 50-synaptics.conf, and that he section which was intended for
+use with future pnp-id matching can be dropped, as that is now all handled
+in the kernel.
+
+While at also remove the comment about disabling the bottom edge area, as that
+is now done automatically.
+
+Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+Reviewed-by: Hans de Goede <hdegoede@redhat.com>
+(cherry picked from commit 7bf27568417691e772e715f8fc6c30ea7ec892d6)
+
+Conflicts:
+	src/eventcomm.c
+
+(cherry picked from commit fa54c5b8fcf75531b2d6c6bb6879b3414e5c7792)
+---
+ conf/50-synaptics.conf |  9 ++++-----
+ man/synaptics.man      | 29 +++++++++++++++++++++++------
+ src/eventcomm.c        |  8 ++++++++
+ src/properties.c       |  3 +++
+ src/synaptics.c        |  7 ++++++-
+ src/synapticsstr.h     |  1 +
+ 6 files changed, 45 insertions(+), 12 deletions(-)
+
+diff --git a/conf/50-synaptics.conf b/conf/50-synaptics.conf
+index dd16ca2..a3145b8 100644
+--- a/conf/50-synaptics.conf
++++ b/conf/50-synaptics.conf
+@@ -25,16 +25,15 @@ Section "InputClass"
+         Option "Ignore" "on"
+ EndSection
+ 
+-# This option enables the bottom right corner to be a right button on
+-# non-synaptics clickpads.
++# This option enables the bottom right corner to be a right button on clickpads
++# and the right and middle top areas to be right / middle buttons on clickpads
++# with a top button area.
+ # This option is only interpreted by clickpads.
+ Section "InputClass"
+         Identifier "Default clickpad buttons"
+         MatchDriver "synaptics"
+         Option "SoftButtonAreas" "50% 0 82% 0 0 0 0 0"
+-#       To disable the bottom edge area so the buttons only work as buttons,
+-#       not for movement, set the AreaBottomEdge
+-#       Option "AreaBottomEdge" "82%"
++        Option "SecondarySoftButtonAreas" "58% 0 0 8% 42% 58% 0 8%"
+ EndSection
+ 
+ # This option disables software buttons on Apple touchpads.
+diff --git a/man/synaptics.man b/man/synaptics.man
+index 86eb663..e35ab6c 100644
+--- a/man/synaptics.man
++++ b/man/synaptics.man
+@@ -453,17 +453,28 @@ buttons to share an edge value.
+ Property: "Synaptics Soft Button Areas"
+ .
+ .TP
+-.BI "Option \*qSecondarySoftButtonAreas\*q \*q" "RBL RBR RBT RBB MBL MBR MBT MBB" \*q
++.BI "Option \*qHasSecondarySoftButtons\*q \*q" boolean \*q
+ This option is only available on ClickPad devices.
+-Enable secondary soft button click area support on ClickPad devices (usually on
++Enable the secondary software button area support. The exact area must be
++set in option \*qSecondarySoftButtonAreas\*q.  See
++.B ClickPad support
++for more details.
++.
++.TP
++.BI "Option \*qSecondarySoftButtonAreas\*q \*q" "RBL RBR RBT RBB MBL MBR MBT MBB" \*q
++This option is only available on ClickPad devices and only if
++.B Option \*qHasSecondarySoftButtons\*q
++is enabled.
++Define the secondary soft button click areas on ClickPad devices (usually on
+ top of the device).
+ For the allowed values for this option, see
+ .B Option \*qSoftButtonAreas\*q.
+ Primary and secondary soft button areas must not overlap each other. If they do,
+ the behavior of the driver is undefined.
+ Property: "Synaptics Secondary Soft Button Areas". This property is only
+-initialized if the option is set in the
+-__xconfigfile__(__filemansuffix__).
++initialized if 
++.B Option \*qHasSecondarySoftButtons\*q 
++is enabled and this option is set in the __xconfigfile__(__filemansuffix__).
+ .
+ 
+ .SH CONFIGURATION DETAILS
+@@ -690,9 +701,15 @@ area, a right or middle click is performed.
+ .LP
+ Some laptops, most notably the Lenovo T440, T540 and x240 series, provide a
+ pointing stick without physical buttons. On those laptops, the top of the
+-touchpad acts as software-emulated button area. This area can be configured
++touchpad acts as software-emulated button area. This area can be enabled
+ with
+-.B Option SecondarySoftButtonAreas.
++.B Option \*qHasSecondarySoftButtons\*q
++and configured
++with
++.B Option \*qSecondarySoftButtonAreas\*q.
++On some platforms, this option
++will be set automatically if the kernel detects a matching device. On Linux,
++the device must have the INPUT_PROP_TOPBUTTONPAD property set.
+ 
+ .SH "DEVICE PROPERTIES"
+ Synaptics 1.0 and higher support input device properties if the driver is
+diff --git a/src/eventcomm.c b/src/eventcomm.c
+index 4550ef2..a66c6b0 100644
+--- a/src/eventcomm.c
++++ b/src/eventcomm.c
+@@ -50,6 +50,9 @@
+ #ifndef INPUT_PROP_SEMI_MT
+ #define INPUT_PROP_SEMI_MT 0x03
+ #endif
++#ifndef INPUT_PROP_TOPBUTTONPAD
++#define INPUT_PROP_TOPBUTTONPAD 0x04
++#endif
+ 
+ #define SYSCALL(call) while (((call) == -1) && (errno == EINTR))
+ 
+@@ -802,6 +805,11 @@ event_query_touch(InputInfoPtr pInfo)
+         xf86IDrvMsg(pInfo, X_INFO, "found clickpad property\n");
+         para->clickpad = TRUE;
+     }
++
++    if (rc>= 0 && BitIsOn(&prop, INPUT_PROP_TOPBUTTONPAD)) {
++        xf86IDrvMsg(pInfo, X_INFO, "found top buttonpad property\n");
++        para->has_secondary_buttons = TRUE;
++    }
+ #endif
+ 
+     mtdev = mtdev_new_open(pInfo->fd);
+diff --git a/src/properties.c b/src/properties.c
+index 278114a..b3e09c0 100644
+--- a/src/properties.c
++++ b/src/properties.c
+@@ -173,6 +173,9 @@ InitSoftButtonProperty(InputInfoPtr pInfo)
+     prop_softbutton_areas =
+         InitAtom(pInfo->dev, SYNAPTICS_PROP_SOFTBUTTON_AREAS, 32, 8, values);
+ 
++    if (!para->has_secondary_buttons)
++        return;
++
+     values[0] = para->softbutton_areas[TOP_RIGHT_BUTTON_AREA][LEFT];
+     values[1] = para->softbutton_areas[TOP_RIGHT_BUTTON_AREA][RIGHT];
+     values[2] = para->softbutton_areas[TOP_RIGHT_BUTTON_AREA][TOP];
+diff --git a/src/synaptics.c b/src/synaptics.c
+index 78adfaf..68705e7 100644
+--- a/src/synaptics.c
++++ b/src/synaptics.c
+@@ -659,6 +659,10 @@ set_default_parameters(InputInfoPtr pInfo)
+     pars->tap_time_2 = xf86SetIntOption(opts, "MaxDoubleTapTime", 180);
+     pars->click_time = xf86SetIntOption(opts, "ClickTime", 100);
+     pars->clickpad = xf86SetBoolOption(opts, "ClickPad", pars->clickpad);       /* Probed */
++    if (pars->clickpad)
++        pars->has_secondary_buttons = xf86SetBoolOption(opts,
++                                                        "HasSecondarySoftButtons",
++                                                        pars->has_secondary_buttons);
+     pars->clickpad_ignore_motion_time = 100; /* ms */
+     /* middle mouse button emulation on a clickpad? nah, you're joking */
+     middle_button_timeout = pars->clickpad ? 0 : 75;
+@@ -738,7 +742,8 @@ set_default_parameters(InputInfoPtr pInfo)
+     }
+ 
+     set_primary_softbutton_areas_option(pInfo);
+-    set_secondary_softbutton_areas_option(pInfo);
++    if (pars->has_secondary_buttons)
++        set_secondary_softbutton_areas_option(pInfo);
+ }
+ 
+ static double
+diff --git a/src/synapticsstr.h b/src/synapticsstr.h
+index 1622123..4226f06 100644
+--- a/src/synapticsstr.h
++++ b/src/synapticsstr.h
+@@ -172,6 +172,7 @@ typedef struct _SynapticsParameters {
+     int tap_time_2;             /* max. tapping time for double taps */
+     int click_time;             /* The duration of a single click */
+     Bool clickpad;              /* Device is a has integrated buttons */
++    Bool has_secondary_buttons; /* Device has a top soft-button area */
+     int clickpad_ignore_motion_time; /* Ignore motion for X ms after a click */
+     int emulate_mid_button_time;        /* Max time between left and right button presses to
+                                            emulate a middle button press. */
+-- 
+1.9.3
+

@@ -1,0 +1,101 @@
+From ba4964d28a428525331baf99bf91b3a4ede26bce Mon Sep 17 00:00:00 2001
+From: Peter Hutterer <peter.hutterer@who-t.net>
+Date: Mon, 17 Mar 2014 14:55:37 +1000
+Subject: [PATCH synaptics 13/14] If the touchpad is in TOUCHPAD_OFF mode,
+ allow physical clicks
+
+Enabling clicks in off mode also allows for the new Lenovo *40 series to use
+the top software buttons while the touchpad is disabled. This benefits those
+that usually disable touchpads altogether but still need the buttons for the
+trackstick.
+
+This changes existing behaviour, but TouchpadOff was always intended to stop
+erroneous events while typing. Physical button presses are hard to trigger
+accidentally. On the touchpads that TouchpadOff concept was originally
+designed for the buttons are nowhere near the keyboard and are physically
+separated from the touchpad anyway. On Clickpads, triggering a physical
+click requires more force than accidentally touching the surface.
+
+https://bugs.freedesktop.org/show_bug.cgi?id=76156
+
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+Reviewed-by: Hans de Goede <hdegoede@redhat.com>
+(cherry picked from commit dc5474964d4ec73b5c324961026e1037bb344946)
+(cherry picked from commit 11b2814c17c17cc43cf1b22f56998b100e59cf04)
+---
+ man/synaptics.man |  7 ++++++-
+ src/synaptics.c   | 17 +++++++----------
+ 2 files changed, 13 insertions(+), 11 deletions(-)
+
+diff --git a/man/synaptics.man b/man/synaptics.man
+index 88009f6..86eb663 100644
+--- a/man/synaptics.man
++++ b/man/synaptics.man
+@@ -226,9 +226,14 @@ Valid values are:
+ .TS
+ l l.
+ 0	Touchpad is enabled
+-1	Touchpad is switched off
++1	Touchpad is switched off (physical clicks still work)
+ 2	Only tapping and scrolling is switched off
+ .TE
++When the touchpad is switched off, button events caused by a physical
++button press are still interpreted. On a ClickPad, this includes
++software-emulated middle and right buttons as defined by
++the SoftButtonAreas setting.
++.TP
+ Property: "Synaptics Off"
+ .TP
+ .BI "Option \*qLockedDrags\*q \*q" boolean \*q
+diff --git a/src/synaptics.c b/src/synaptics.c
+index 512ca8d..78adfaf 100644
+--- a/src/synaptics.c
++++ b/src/synaptics.c
+@@ -1856,7 +1856,8 @@ HandleTapProcessing(SynapticsPrivate * priv, struct SynapticsHwState *hw,
+     enum EdgeType edge;
+     int delay = 1000000000;
+ 
+-    if (priv->finger_state == FS_BLOCKED)
++    if (para->touchpad_off == TOUCHPAD_OFF ||
++        priv->finger_state == FS_BLOCKED)
+         return delay;
+ 
+     touch = finger >= FS_TOUCHED && priv->finger_state == FS_UNTOUCHED;
+@@ -2274,7 +2275,9 @@ HandleScrolling(SynapticsPrivate * priv, struct SynapticsHwState *hw,
+     SynapticsParameters *para = &priv->synpara;
+     int delay = 1000000000;
+ 
+-    if ((priv->synpara.touchpad_off == TOUCHPAD_TAP_OFF) || (priv->finger_state == FS_BLOCKED)) {
++    if (priv->synpara.touchpad_off == TOUCHPAD_TAP_OFF ||
++        priv->synpara.touchpad_off == TOUCHPAD_OFF ||
++        priv->finger_state == FS_BLOCKED) {
+         stop_coasting(priv);
+         priv->circ_scroll_on = FALSE;
+         priv->vert_scroll_edge_on = FALSE;
+@@ -2883,12 +2886,6 @@ HandleState(InputInfoPtr pInfo, struct SynapticsHwState *hw, CARD32 now,
+     Bool using_cumulative_coords = FALSE;
+     Bool ignore_motion;
+ 
+-    /* If touchpad is switched off, we skip the whole thing and return delay */
+-    if (para->touchpad_off == TOUCHPAD_OFF) {
+-        UpdateTouchState(pInfo, hw);
+-        return delay;
+-    }
+-
+     /* We need both and x/y, the driver can't handle just one of the two
+      * yet. But since it's possible to hit a phys button on non-clickpads
+      * without ever getting motion data first, we must continue with 0/0 for
+@@ -2927,8 +2924,8 @@ HandleState(InputInfoPtr pInfo, struct SynapticsHwState *hw, CARD32 now,
+              current_button_area(para, hw->x, hw->y) == NO_BUTTON_AREA)
+         priv->last_button_area = NO_BUTTON_AREA;
+ 
+-    ignore_motion =
+-        !using_cumulative_coords && priv->last_button_area != NO_BUTTON_AREA;
++    ignore_motion = para->touchpad_off == TOUCHPAD_OFF ||
++        (!using_cumulative_coords && priv->last_button_area != NO_BUTTON_AREA);
+ 
+     /* these two just update hw->left, right, etc. */
+     update_hw_button_state(pInfo, hw, now, &delay);
+-- 
+1.9.3
+

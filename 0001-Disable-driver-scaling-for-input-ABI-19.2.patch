@@ -1,0 +1,98 @@
+From 0fb59b3487d57523a03f078a2061e2ea0cacbc7c Mon Sep 17 00:00:00 2001
+From: Peter Hutterer <peter.hutterer@who-t.net>
+Date: Fri, 19 Jul 2013 11:08:43 +1000
+Subject: [PATCH synaptics] Disable driver scaling for input ABI 19.2
+
+For absolute devices in relative mode, i.e. touchpads, the server now takes
+device resolution into account. Doing so means that the driver mustn't
+scale, so we deactivate those bits in the driver.
+
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+---
+ src/synaptics.c    |  9 +++++++++
+ src/synapticsstr.h | 10 ++++++++++
+ 2 files changed, 19 insertions(+)
+
+diff --git a/src/synaptics.c b/src/synaptics.c
+index eb38271..e391a98 100644
+--- a/src/synaptics.c
++++ b/src/synaptics.c
+@@ -133,9 +133,11 @@ static int DeviceOff(DeviceIntPtr);
+ static int DeviceClose(DeviceIntPtr);
+ static Bool QueryHardware(InputInfoPtr);
+ static void ReadDevDimensions(InputInfoPtr);
++#ifndef NO_DRIVER_SCALING
+ static void ScaleCoordinates(SynapticsPrivate * priv,
+                              struct SynapticsHwState *hw);
+ static void CalculateScalingCoeffs(SynapticsPrivate * priv);
++#endif
+ static void SanitizeDimensions(InputInfoPtr pInfo);
+ 
+ void InitDeviceProperties(InputInfoPtr pInfo);
+@@ -829,7 +831,10 @@ SynapticsPreInit(InputDriverPtr drv, InputInfoPtr pInfo, int flags)
+ 
+     set_default_parameters(pInfo);
+ 
++#ifndef NO_DRIVER_SCALING
+     CalculateScalingCoeffs(priv);
++#endif
++
+ 
+     priv->comm.buffer = XisbNew(pInfo->fd, INPUT_BUFFER_SIZE);
+ 
+@@ -2863,7 +2868,9 @@ HandleState(InputInfoPtr pInfo, struct SynapticsHwState *hw, CARD32 now,
+          * calculations that require unadjusted coordinates, for example edge
+          * detection.
+          */
++#ifndef NO_DRIVER_SCALING
+         ScaleCoordinates(priv, hw);
++#endif
+     }
+ 
+     dx = dy = 0;
+@@ -2987,6 +2994,7 @@ QueryHardware(InputInfoPtr pInfo)
+     return TRUE;
+ }
+ 
++#ifndef NO_DRIVER_SCALING
+ static void
+ ScaleCoordinates(SynapticsPrivate * priv, struct SynapticsHwState *hw)
+ {
+@@ -3016,3 +3024,4 @@ CalculateScalingCoeffs(SynapticsPrivate * priv)
+         priv->vert_coeff = 1;
+     }
+ }
++#endif
+diff --git a/src/synapticsstr.h b/src/synapticsstr.h
+index 428befa..a9901a2 100644
+--- a/src/synapticsstr.h
++++ b/src/synapticsstr.h
+@@ -28,6 +28,14 @@
+ #define LogMessageVerbSigSafe xf86MsgVerb
+ #endif
+ 
++#if GET_ABI_MAJOR(ABI_XINPUT_VERSION) >= 19
++#if GET_ABI_MINOR(ABI_XINPUT_VERSION) >= 2
++/* as of 19.2, the server takes device resolution into account when scaling
++   relative events from abs device, so we must not scale in synaptics. */
++#define NO_DRIVER_SCALING 1
++#endif
++#endif
++
+ #ifdef DBG
+ #undef DBG
+ #endif
+@@ -250,8 +258,10 @@ struct _SynapticsPrivateRec {
+     int prev_z;                 /* previous z value, for palm detection */
+     int prevFingers;            /* previous numFingers, for transition detection */
+     int avg_width;              /* weighted average of previous fingerWidth values */
++#ifndef NO_DRIVER_SCALING
+     double horiz_coeff;         /* normalization factor for x coordintes */
+     double vert_coeff;          /* normalization factor for y coordintes */
++#endif
+ 
+     int minx, maxx, miny, maxy; /* min/max dimensions as detected */
+     int minp, maxp, minw, maxw; /* min/max pressure and finger width as detected */
+-- 
+1.8.2.1
+

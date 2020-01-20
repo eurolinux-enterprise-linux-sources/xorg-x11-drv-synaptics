@@ -1,0 +1,94 @@
+From cd2a67253fe8b29b87dd12168186020d196cdd93 Mon Sep 17 00:00:00 2001
+From: Stephen Chandler Paul <thatslyude@gmail.com>
+Date: Mon, 10 Mar 2014 18:25:20 -0400
+Subject: [PATCH synaptics 11/14] Replace is_inside_anybutton_area with
+ current_button_area
+
+Signed-off-by: Stephen Chandler Paul <thatslyude@gmail.com>
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+(cherry picked from commit 9a419ba01c53a38b4b601f4415801fca29a2b4e2)
+(cherry picked from commit 8732f7b5c16aaba1df4b2429804d02c2742bdf59)
+---
+ src/synaptics.c    | 27 ++++++++++++++++-----------
+ src/synapticsstr.h |  3 ++-
+ 2 files changed, 18 insertions(+), 12 deletions(-)
+
+diff --git a/src/synaptics.c b/src/synaptics.c
+index 4592f69..c3bda7b 100644
+--- a/src/synaptics.c
++++ b/src/synaptics.c
+@@ -998,7 +998,7 @@ SynapticsReset(SynapticsPrivate * priv)
+     priv->finger_state = FS_UNTOUCHED;
+     priv->last_motion_millis = 0;
+     priv->clickpad_click_millis = 0;
+-    priv->inside_button_area = FALSE;
++    priv->last_button_area = NO_BUTTON_AREA;
+     priv->tap_state = TS_START;
+     priv->tap_button = 0;
+     priv->tap_button_state = TBS_BUTTON_UP;
+@@ -1486,12 +1486,15 @@ is_inside_top_or_bottom_button_area(SynapticsParameters * para, int offset,
+     return inside_area;
+ }
+ 
+-static Bool
+-is_inside_anybutton_area(SynapticsParameters * para, int x, int y)
++static enum SoftButtonAreas
++current_button_area(SynapticsParameters * para, int x, int y)
+ {
+-    return
+-        is_inside_top_or_bottom_button_area(para, BOTTOM_BUTTON_AREA, x, y) ||
+-        is_inside_top_or_bottom_button_area(para, TOP_BUTTON_AREA, x, y);
++    if (is_inside_top_or_bottom_button_area(para, BOTTOM_BUTTON_AREA, x, y))
++        return BOTTOM_BUTTON_AREA;
++    else if (is_inside_top_or_bottom_button_area(para, TOP_BUTTON_AREA, x, y))
++        return TOP_BUTTON_AREA;
++    else
++        return NO_BUTTON_AREA;
+ }
+ 
+ static CARD32
+@@ -2916,13 +2919,15 @@ HandleState(InputInfoPtr pInfo, struct SynapticsHwState *hw, CARD32 now,
+ 
+     /* Ignore motion *starting* inside softbuttonareas */
+     if (priv->finger_state < FS_TOUCHED)
+-        priv->inside_button_area = is_inside_anybutton_area(para, hw->x, hw->y);
+-    /* If we already have a finger down, clear inside_button_area if it goes
++        priv->last_button_area = current_button_area(para, hw->x, hw->y);
++    /* If we already have a finger down, clear last_button_area if it goes
+        outside of the softbuttonareas */
+-    else if (priv->inside_button_area && !is_inside_anybutton_area(para, hw->x, hw->y))
+-        priv->inside_button_area = FALSE;
++    else if (priv->last_button_area != NO_BUTTON_AREA &&
++             current_button_area(para, hw->x, hw->y) == NO_BUTTON_AREA)
++        priv->last_button_area = NO_BUTTON_AREA;
+ 
+-    ignore_motion = !using_cumulative_coords && priv->inside_button_area;
++    ignore_motion =
++        !using_cumulative_coords && priv->last_button_area != NO_BUTTON_AREA;
+ 
+     /* these two just update hw->left, right, etc. */
+     update_hw_button_state(pInfo, hw, now, &delay);
+diff --git a/src/synapticsstr.h b/src/synapticsstr.h
+index 3a9f88c..1622123 100644
+--- a/src/synapticsstr.h
++++ b/src/synapticsstr.h
+@@ -146,6 +146,7 @@ enum TouchpadModel {
+ };
+ 
+ enum SoftButtonAreas {
++    NO_BUTTON_AREA = -1,
+     BOTTOM_BUTTON_AREA = 0,
+     BOTTOM_RIGHT_BUTTON_AREA = 0,
+     BOTTOM_MIDDLE_BUTTON_AREA = 1,
+@@ -253,7 +254,7 @@ struct _SynapticsPrivateRec {
+     Bool prev_up;               /* Previous up button value, for double click emulation */
+     enum FingerState finger_state;      /* previous finger state */
+     CARD32 last_motion_millis;  /* time of the last motion */
+-    Bool inside_button_area;    /* Inside button area (ignore motion) */
++    enum SoftButtonAreas last_button_area;    /* Last button area we were in */
+     int clickpad_click_millis;  /* Time of last clickpad click */
+ 
+     enum TapState tap_state;    /* State of tap processing */
+-- 
+1.9.3
+

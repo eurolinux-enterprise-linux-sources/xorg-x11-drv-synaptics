@@ -1,0 +1,187 @@
+From 275c00454e2329b55ac1d377702825a4ab01b450 Mon Sep 17 00:00:00 2001
+From: Peter Hutterer <peter.hutterer@who-t.net>
+Date: Mon, 10 Mar 2014 09:07:59 +1000
+Subject: [PATCH synaptics 10/14] Add property support for secondary (top)
+ software buttons
+
+This was originally intended as a fixed xorg.conf option only (and still
+largely is seen as such). Secondary software button are required only on a specific series
+of touchpads and should be pre-configured by the system and/or the
+distribution. As such, the property will not be initialized if it is not set
+in the xorg.conf and will thus not respond to runtime changes.
+
+Exposing the property in this way gives clients a chance of detecting if a top
+software button area is present and thus adjust their behaviour accordingly.
+
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+Reviewed-by: Hans de Goede <hdegoede@redhat.com>
+(cherry picked from commit 66240dc329683f0141c1e11590ea2c3d8ca25788)
+(cherry picked from commit 1e08fbf8a71b5958ac1765c889b5101e62fad20f)
+---
+ include/synaptics-properties.h |  3 +++
+ man/synaptics.man              |  3 ++-
+ src/properties.c               | 48 +++++++++++++++++++++++++++++++++---------
+ src/synaptics.c                | 16 --------------
+ src/synapticsstr.h             | 16 ++++++++++++++
+ 5 files changed, 59 insertions(+), 27 deletions(-)
+
+diff --git a/include/synaptics-properties.h b/include/synaptics-properties.h
+index b717880..5207a09 100644
+--- a/include/synaptics-properties.h
++++ b/include/synaptics-properties.h
+@@ -149,6 +149,9 @@
+ /* 32 bit, 4 values, left, right, top, buttom */
+ #define SYNAPTICS_PROP_SOFTBUTTON_AREAS "Synaptics Soft Button Areas"
+ 
++/* 32 bit, 4 values, left, right, top, buttom */
++#define SYNAPTICS_PROP_SECONDARY_SOFTBUTTON_AREAS "Synaptics Secondary Soft Button Areas"
++
+ /* 32 Bit Integer, 2 values, horizontal hysteresis, vertical hysteresis */
+ #define SYNAPTICS_PROP_NOISE_CANCELLATION "Synaptics Noise Cancellation"
+ 
+diff --git a/man/synaptics.man b/man/synaptics.man
+index a80aaad..88009f6 100644
+--- a/man/synaptics.man
++++ b/man/synaptics.man
+@@ -456,7 +456,8 @@ For the allowed values for this option, see
+ .B Option \*qSoftButtonAreas\*q.
+ Primary and secondary soft button areas must not overlap each other. If they do,
+ the behavior of the driver is undefined.
+-No property associated, this option must be set in the
++Property: "Synaptics Secondary Soft Button Areas". This property is only
++initialized if the option is set in the
+ __xconfigfile__(__filemansuffix__).
+ .
+ 
+diff --git a/src/properties.c b/src/properties.c
+index dd88fc7..278114a 100644
+--- a/src/properties.c
++++ b/src/properties.c
+@@ -88,6 +88,7 @@ Atom prop_capabilities = 0;
+ Atom prop_resolution = 0;
+ Atom prop_area = 0;
+ Atom prop_softbutton_areas = 0;
++Atom prop_secondary_softbutton_areas = 0;
+ Atom prop_noise_cancellation = 0;
+ Atom prop_product_id = 0;
+ Atom prop_device_node = 0;
+@@ -161,16 +162,30 @@ InitSoftButtonProperty(InputInfoPtr pInfo)
+     SynapticsParameters *para = &priv->synpara;
+     int values[8];
+ 
+-    values[0] = para->softbutton_areas[0][0];
+-    values[1] = para->softbutton_areas[0][1];
+-    values[2] = para->softbutton_areas[0][2];
+-    values[3] = para->softbutton_areas[0][3];
+-    values[4] = para->softbutton_areas[1][0];
+-    values[5] = para->softbutton_areas[1][1];
+-    values[6] = para->softbutton_areas[1][2];
+-    values[7] = para->softbutton_areas[1][3];
++    values[0] = para->softbutton_areas[BOTTOM_RIGHT_BUTTON_AREA][LEFT];
++    values[1] = para->softbutton_areas[BOTTOM_RIGHT_BUTTON_AREA][RIGHT];
++    values[2] = para->softbutton_areas[BOTTOM_RIGHT_BUTTON_AREA][TOP];
++    values[3] = para->softbutton_areas[BOTTOM_RIGHT_BUTTON_AREA][BOTTOM];
++    values[4] = para->softbutton_areas[BOTTOM_MIDDLE_BUTTON_AREA][LEFT];
++    values[5] = para->softbutton_areas[BOTTOM_MIDDLE_BUTTON_AREA][RIGHT];
++    values[6] = para->softbutton_areas[BOTTOM_MIDDLE_BUTTON_AREA][TOP];
++    values[7] = para->softbutton_areas[BOTTOM_MIDDLE_BUTTON_AREA][BOTTOM];
+     prop_softbutton_areas =
+         InitAtom(pInfo->dev, SYNAPTICS_PROP_SOFTBUTTON_AREAS, 32, 8, values);
++
++    values[0] = para->softbutton_areas[TOP_RIGHT_BUTTON_AREA][LEFT];
++    values[1] = para->softbutton_areas[TOP_RIGHT_BUTTON_AREA][RIGHT];
++    values[2] = para->softbutton_areas[TOP_RIGHT_BUTTON_AREA][TOP];
++    values[3] = para->softbutton_areas[TOP_RIGHT_BUTTON_AREA][BOTTOM];
++    values[4] = para->softbutton_areas[TOP_MIDDLE_BUTTON_AREA][LEFT];
++    values[5] = para->softbutton_areas[TOP_MIDDLE_BUTTON_AREA][RIGHT];
++    values[6] = para->softbutton_areas[TOP_MIDDLE_BUTTON_AREA][TOP];
++    values[7] = para->softbutton_areas[TOP_MIDDLE_BUTTON_AREA][BOTTOM];
++
++    if (values[0] || values[1] || values[2] || values[4] ||
++        values[5] || values[6] || values[7])
++        prop_secondary_softbutton_areas =
++            InitAtom(pInfo->dev, SYNAPTICS_PROP_SECONDARY_SOFTBUTTON_AREAS, 32, 8, values);
+ }
+ 
+ void
+@@ -690,8 +705,21 @@ SetProperty(DeviceIntPtr dev, Atom property, XIPropertyValuePtr prop,
+         if (!SynapticsIsSoftButtonAreasValid(areas))
+             return BadValue;
+ 
+-        memcpy(para->softbutton_areas[0], areas, 4 * sizeof(int));
+-        memcpy(para->softbutton_areas[1], areas + 4, 4 * sizeof(int));
++        memcpy(para->softbutton_areas[BOTTOM_RIGHT_BUTTON_AREA], areas, 4 * sizeof(int));
++        memcpy(para->softbutton_areas[BOTTOM_MIDDLE_BUTTON_AREA], areas + 4, 4 * sizeof(int));
++    }
++    else if (property == prop_secondary_softbutton_areas) {
++        int *areas;
++
++        if (prop->size != 8 || prop->format != 32 || prop->type != XA_INTEGER)
++            return BadMatch;
++
++        areas = (int *) prop->data;
++        if (!SynapticsIsSoftButtonAreasValid(areas))
++            return BadValue;
++
++        memcpy(para->softbutton_areas[TOP_RIGHT_BUTTON_AREA], areas, 4 * sizeof(int));
++        memcpy(para->softbutton_areas[TOP_MIDDLE_BUTTON_AREA], areas + 4, 4 * sizeof(int));
+     }
+     else if (property == prop_noise_cancellation) {
+         INT32 *hyst;
+diff --git a/src/synaptics.c b/src/synaptics.c
+index 7a39df9..4592f69 100644
+--- a/src/synaptics.c
++++ b/src/synaptics.c
+@@ -89,22 +89,6 @@ enum EdgeType {
+     LEFT_TOP_EDGE = TOP_EDGE | LEFT_EDGE
+ };
+ 
+-enum SoftButtonAreas {
+-    BOTTOM_BUTTON_AREA = 0,
+-    BOTTOM_RIGHT_BUTTON_AREA = 0,
+-    BOTTOM_MIDDLE_BUTTON_AREA = 1,
+-    TOP_BUTTON_AREA = 2,
+-    TOP_RIGHT_BUTTON_AREA = 2,
+-    TOP_MIDDLE_BUTTON_AREA = 3
+-};
+-
+-enum SoftButtonAreaEdges {
+-    LEFT = 0,
+-    RIGHT = 1,
+-    TOP = 2,
+-    BOTTOM = 3
+-};
+-
+ /*
+  * We expect to be receiving a steady 80 packets/sec (which gives 40
+  * reports/sec with more than one finger on the pad, as Advanced Gesture Mode
+diff --git a/src/synapticsstr.h b/src/synapticsstr.h
+index a21ce00..3a9f88c 100644
+--- a/src/synapticsstr.h
++++ b/src/synapticsstr.h
+@@ -145,6 +145,22 @@ enum TouchpadModel {
+     MODEL_UNIBODY_MACBOOK
+ };
+ 
++enum SoftButtonAreas {
++    BOTTOM_BUTTON_AREA = 0,
++    BOTTOM_RIGHT_BUTTON_AREA = 0,
++    BOTTOM_MIDDLE_BUTTON_AREA = 1,
++    TOP_BUTTON_AREA = 2,
++    TOP_RIGHT_BUTTON_AREA = 2,
++    TOP_MIDDLE_BUTTON_AREA = 3
++};
++
++enum SoftButtonAreaEdges {
++    LEFT = 0,
++    RIGHT = 1,
++    TOP = 2,
++    BOTTOM = 3
++};
++
+ typedef struct _SynapticsParameters {
+     /* Parameter data */
+     int left_edge, right_edge, top_edge, bottom_edge;   /* edge coordinates absolute */
+-- 
+1.9.3
+

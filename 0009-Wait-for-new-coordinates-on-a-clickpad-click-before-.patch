@@ -1,0 +1,114 @@
+From 8adbeacd1a140e4f1c203dde0c60d488dbec1d26 Mon Sep 17 00:00:00 2001
+From: Hans de Goede <hdegoede@redhat.com>
+Date: Fri, 21 Feb 2014 10:31:44 +0100
+Subject: [PATCH synaptics 09/14] Wait for *new* coordinates on a clickpad
+ click before reporting the click
+
+It is possible for a click to get reported before any related touch events
+get reported, here is the relevant part of an evemu-record session on a T440s:
+
+E: 3.985585 0000 0000 0000	# ------------ SYN_REPORT (0) ----------
+E: 3.997419 0003 0039 -001	# EV_ABS / ABS_MT_TRACKING_ID   -1
+E: 3.997419 0001 014a 0000	# EV_KEY / BTN_TOUCH            0
+E: 3.997419 0003 0018 0000	# EV_ABS / ABS_PRESSURE         0
+E: 3.997419 0001 0145 0000	# EV_KEY / BTN_TOOL_FINGER      0
+E: 3.997419 0000 0000 0000	# ------------ SYN_REPORT (0) ----------
+E: 5.117881 0001 0110 0001	# EV_KEY / BTN_LEFT             1
+E: 5.117881 0000 0000 0000	# ------------ SYN_REPORT (0) ----------
+E: 5.133422 0003 0039 0187	# EV_ABS / ABS_MT_TRACKING_ID   187
+E: 5.133422 0003 0035 3098	# EV_ABS / ABS_MT_POSITION_X    3098
+E: 5.133422 0003 0036 3282	# EV_ABS / ABS_MT_POSITION_Y    3282
+E: 5.133422 0003 003a 0046	# EV_ABS / ABS_MT_PRESSURE      46
+E: 5.133422 0001 014a 0001	# EV_KEY / BTN_TOUCH            1
+E: 5.133422 0003 0000 3102	# EV_ABS / ABS_X                3102
+E: 5.133422 0003 0001 3282	# EV_ABS / ABS_Y                3282
+E: 5.133422 0003 0018 0046	# EV_ABS / ABS_PRESSURE         46
+E: 5.133422 0001 0145 0001	# EV_KEY / BTN_TOOL_FINGER      1
+E: 5.133422 0000 0000 0000	# ------------ SYN_REPORT (0) ----------
+
+Notice the BTN_LEFT event all by itself!
+
+If this happens, it may lead to the following problem scenario:
+-touch the touchpad in its right click area
+-let go of the touchpad
+-rapidly click in the middle area, so that BTN_LEFT gets reported before the
+ new coordinates (such as seen in the trace above, this may require some
+ practicing with evemu-record to reproduce)
+-the driver registers the click as a right click because it uses the
+ old coordinates from the cumulative coordinates to determine the
+ click location
+
+This commit fixes this by:
+1) Resetting the cumulative coordinates not only when no button is pressed,
+   but also when there is no finger touching the touchpad, so that when
+   we do get a touch the cumulative coordinates start at the right place
+2) Delaying processing the BTN_LEFT down transition if there is no finger
+   touching the touchpad
+
+This approach has one downside, if we wrongly identify a touchpad as
+a clickpad, then the left button won't work unless the user touches the
+touchpad while clicking the left button.
+
+If we want we can fix this by doing something like this:
+1) Making update_hw_button_state return a delay; and
+2) Tracking that we've delayed BTN_LEFT down transition processing; and
+3) When we've delayed BTN_LEFT down transition return a small delay value; and
+4) If when we're called again we still don't have a finger down, just
+   treat the click as a BTN_LEFT
+
+But this is not worth the trouble IMHO, the proper thing to do in this
+scenario is to fix the mis-identification of the touchpad as a clickpad.
+
+Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+(cherry picked from commit bbe4c56c4998a90b478581a4d93717251d8e05be)
+(cherry picked from commit eb3af31c597ed6dc1bef31f39a5f6c9d586713ae)
+---
+ src/eventcomm.c | 5 +++--
+ src/synaptics.c | 7 +++++++
+ 2 files changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/src/eventcomm.c b/src/eventcomm.c
+index 1534b7c..4550ef2 100644
+--- a/src/eventcomm.c
++++ b/src/eventcomm.c
+@@ -664,8 +664,9 @@ EventReadHwState(InputInfoPtr pInfo,
+ 
+     SynapticsResetTouchHwState(hw, FALSE);
+ 
+-    /* Reset cumulative values if buttons were not previously pressed */
+-    if (!hw->left && !hw->right && !hw->middle) {
++    /* Reset cumulative values if buttons were not previously pressed,
++     * or no finger was previously present. */
++    if ((!hw->left && !hw->right && !hw->middle) || hw->z < para->finger_low) {
+         hw->cumulative_dx = hw->x;
+         hw->cumulative_dy = hw->y;
+         sync_cumulative = TRUE;
+diff --git a/src/synaptics.c b/src/synaptics.c
+index f289b35..7a39df9 100644
+--- a/src/synaptics.c
++++ b/src/synaptics.c
+@@ -2660,6 +2660,12 @@ update_hw_button_state(const InputInfoPtr pInfo, struct SynapticsHwState *hw,
+     if (para->clickpad) {
+         /* hw->left is down, but no other buttons were already down */
+         if (!(priv->lastButtons & 7) && hw->left && !hw->right && !hw->middle) {
++            /* If the finger down event is delayed, the x and y
++             * coordinates are stale so we delay processing the click */
++            if (hw->z < para->finger_low) {
++                hw->left = 0;
++                goto out;
++            }
+             if (is_inside_rightbutton_area(para, hw->x, hw->y)) {
+                 hw->left = 0;
+                 hw->right = 1;
+@@ -2691,6 +2697,7 @@ update_hw_button_state(const InputInfoPtr pInfo, struct SynapticsHwState *hw,
+     if (hw->left && !(priv->lastButtons & 7) && hw->numFingers >= 1)
+         handle_clickfinger(priv, hw);
+ 
++out:
+     /* Two finger emulation */
+     if (hw->numFingers == 1 && hw->z >= para->emulate_twofinger_z &&
+         hw->fingerWidth >= para->emulate_twofinger_w) {
+-- 
+1.9.3
+

@@ -47,12 +47,6 @@
 
 #include "synaptics-properties.h"
 
-enum KeyboardActivity {
-    ActivityNew,
-    ActivityNone,
-    ActivityReset
-};
-
 enum TouchpadState {
     TouchpadOn = 0,
     TouchpadOff = 1,
@@ -187,29 +181,29 @@ install_signal_handler(void)
     }
 }
 
-static enum KeyboardActivity
+/**
+ * Return non-zero if the keyboard state has changed since the last call.
+ */
+static int
 keyboard_activity(Display * display)
 {
     static unsigned char old_key_state[KEYMAP_SIZE];
     unsigned char key_state[KEYMAP_SIZE];
     int i;
-    int ret = ActivityNone;
+    int ret = 0;
 
     XQueryKeymap(display, (char *) key_state);
 
     for (i = 0; i < KEYMAP_SIZE; i++) {
         if ((key_state[i] & ~old_key_state[i]) & keyboard_mask[i]) {
-            ret = ActivityNew;
+            ret = 1;
             break;
         }
     }
     if (ignore_modifier_combos) {
         for (i = 0; i < KEYMAP_SIZE; i++) {
             if (key_state[i] & ~keyboard_mask[i]) {
-                if (old_key_state[i] & ~keyboard_mask[i])
-                    ret = ActivityNone;
-                else
-                    ret = ActivityReset;
+                ret = 0;
                 break;
             }
         }
@@ -238,17 +232,8 @@ main_loop(Display * display, double idle_time, int poll_delay)
 
     for (;;) {
         current_time = get_time();
-        switch (keyboard_activity(display)) {
-            case ActivityNew:
-                last_activity = current_time;
-                break;
-            case ActivityNone:
-                /* NOP */;
-                break;
-            case ActivityReset:
-                last_activity = 0.0;
-                break;
-        }
+        if (keyboard_activity(display))
+            last_activity = current_time;
 
         /* If system times goes backwards, touchpad can get locked. Make
          * sure our last activity wasn't in the future and reset if it was. */
@@ -438,7 +423,6 @@ record_main_loop(Display * display, double idle_time)
         fd_set read_fds;
         int ret;
         int disable_event = 0;
-        int modifier_event = 0;
         struct timeval timeout;
 
         FD_ZERO(&read_fds);
@@ -470,14 +454,9 @@ record_main_loop(Display * display, double idle_time)
                 disable_event = 1;
             }
 
-            if (cbres.non_modifier_event) {
-                if (ignore_modifier_combos && is_modifier_pressed(&cbres)) {
-                    modifier_event = 1;
-                } else {
-                    disable_event = 1;
-                }
-            } else if (ignore_modifier_keys) {
-                modifier_event = 1;
+            if (cbres.non_modifier_event &&
+                !(ignore_modifier_combos && is_modifier_pressed(&cbres))) {
+                disable_event = 1;
             }
         }
 
@@ -489,13 +468,10 @@ record_main_loop(Display * display, double idle_time)
             toggle_touchpad(False);
         }
 
-        if (modifier_event && pad_disabled) {
-            toggle_touchpad(True);
-        }
-
         if (ret == 0 && pad_disabled) { /* timeout => enable event */
             toggle_touchpad(True);
         }
+
     }                           /* end while(1) */
 
     XFreeModifiermap(cbres.modifiers);

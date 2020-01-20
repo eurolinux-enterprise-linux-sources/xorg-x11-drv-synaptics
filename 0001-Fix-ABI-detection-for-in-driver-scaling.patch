@@ -1,0 +1,35 @@
+From b227ca373de79fe6852ac09e71465c048790cd5b Mon Sep 17 00:00:00 2001
+From: Peter Hutterer <peter.hutterer@who-t.net>
+Date: Fri, 3 Jan 2014 11:23:22 +1000
+Subject: [PATCH synaptics] Fix ABI detection for in-driver scaling
+
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+(cherry picked from commit 49fe70e99d1b0932ab915824c78f952a0fdb3ee7)
+---
+ src/synapticsstr.h | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/synapticsstr.h b/src/synapticsstr.h
+index a9901a2..3d6f756 100644
+--- a/src/synapticsstr.h
++++ b/src/synapticsstr.h
+@@ -28,13 +28,13 @@
+ #define LogMessageVerbSigSafe xf86MsgVerb
+ #endif
+ 
+-#if GET_ABI_MAJOR(ABI_XINPUT_VERSION) >= 19
+-#if GET_ABI_MINOR(ABI_XINPUT_VERSION) >= 2
++#if GET_ABI_MAJOR(ABI_XINPUT_VERSION) > 19
++#define NO_DRIVER_SCALING 1
++#elif GET_ABI_MAJOR(ABI_XINPUT_VERSION) == 19 && GET_ABI_MINOR(ABI_XINPUT_VERSION) >= 2
+ /* as of 19.2, the server takes device resolution into account when scaling
+    relative events from abs device, so we must not scale in synaptics. */
+ #define NO_DRIVER_SCALING 1
+ #endif
+-#endif
+ 
+ #ifdef DBG
+ #undef DBG
+-- 
+1.8.4.2
+

@@ -1,0 +1,125 @@
+From bbb1f0e58d80d975e9aae42384ce12054ca8896c Mon Sep 17 00:00:00 2001
+From: Hans de Goede <hdegoede@redhat.com>
+Date: Wed, 19 Feb 2014 18:30:35 +0100
+Subject: [PATCH synaptics 02/14] Allow using the entire touchpad for motions
+ started inside the active area
+
+synaptics offers an option to make parts of the touchpad insensitive. This
+is ie useful to do palm avoidance rather then palm detection (which may be
+unreliable) by disabling an area of 15% on the right and left side of the
+touchpad.
+
+Currently a motion which has started inside the active area, stops as soon
+as it moves outside of the active area.
+
+If a motion started inside the active area and thus has already generated some
+move events, this makes no sense. If the user moves outside of the active
+area in this case, this is very likely because the user wants to continue
+the motion.
+
+This commit allows such motions to continue normally.
+
+I would like to thank Juerd Waalboer for the basic idea, some coding and lots
+of testing for this fix.
+
+Cc: Juerd Waalboer <juerd@tnx.nl>
+Reported-by: Juerd Waalboer <juerd@tnx.nl>
+Tested-by: Juerd Waalboer <juerd@tnx.nl>
+Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+(cherry picked from commit 945acfc261707be78cbc5438c22b061e20076004)
+(cherry picked from commit 75b6fd13cfc0e8c8b1ca17626b5316a83359e353)
+---
+ man/synaptics.man | 15 ++++++++-------
+ src/synaptics.c   | 11 ++++++-----
+ 2 files changed, 14 insertions(+), 12 deletions(-)
+
+diff --git a/man/synaptics.man b/man/synaptics.man
+index 079a5f8..93c0627 100644
+--- a/man/synaptics.man
++++ b/man/synaptics.man
+@@ -399,7 +399,7 @@ Property: "Synaptics Pad Resolution"
+ .
+ .TP
+ .BI "Option \*qAreaLeftEdge\*q \*q" integer \*q
+-Ignore movements, scrolling and tapping which take place left of this edge.
++Ignore movements, scrolling and tapping which start left of this edge.
+ .
+ The option is disabled by default and can be enabled by setting the
+ AreaLeftEdge option to any integer value other than zero. If supported by the
+@@ -408,7 +408,7 @@ the total width of the touchpad. Property: "Synaptics Area"
+ .
+ .TP
+ .BI "Option \*qAreaRightEdge\*q \*q" integer \*q
+-Ignore movements, scrolling and tapping which take place right of this edge.
++Ignore movements, scrolling and tapping which start right of this edge.
+ .
+ The option is disabled by default and can be enabled by setting the
+ AreaRightEdge option to any integer value other than zero. If supported by the
+@@ -417,7 +417,7 @@ the total width of the touchpad. Property: "Synaptics Area"
+ .
+ .TP
+ .BI "Option \*qAreaTopEdge\*q \*q" integer \*q
+-Ignore movements, scrolling and tapping which take place above this edge.
++Ignore movements, scrolling and tapping which start above this edge.
+ .
+ The option is disabled by default and can be enabled by setting the
+ AreaTopEdge option to any integer value other than zero. If supported by the
+@@ -426,7 +426,7 @@ the total height of the touchpad. Property: "Synaptics Area"
+ .
+ .TP
+ .BI "Option \*qAreaBottomEdge\*q \*q" integer \*q
+-Ignore movements, scrolling and tapping which take place below this edge.
++Ignore movements, scrolling and tapping which start below this edge.
+ .
+ The option is disabled by default and can be enabled by setting the
+ AreaBottomEdge option to any integer value other than zero. If supported by the
+@@ -490,9 +490,10 @@ the touchpad.
+ .PP
+ The perceived physical edges may be adjusted with the AreaLeftEdge,
+ AreaRightEdge, AreaTopEdge, and AreaBottomEdge options. If these values are
+-set to something other than the physical edges, input in the space between
+-the area edge and the respective physical edge is ignored. Note that this
+-reduces the available space on the touchpad.
++set to something other than the physical edges, input that starts in the
++space between the area edge and the respective physical edge is ignored.
++Note that this reduces the available space on the touchpad to start motions
++in.
+ .SS Tapping
+ A tap event happens when the finger is touched and released in a time
+ interval shorter than MaxTapTime, and the touch and release
+diff --git a/src/synaptics.c b/src/synaptics.c
+index e391a98..bc4f24c 100644
+--- a/src/synaptics.c
++++ b/src/synaptics.c
+@@ -1362,6 +1362,11 @@ is_inside_active_area(SynapticsPrivate * priv, int x, int y)
+ {
+     Bool inside_area = TRUE;
+ 
++    /* If a finger is down, then it must have started inside the active_area,
++       allow the motion to complete using the entire area */
++    if (priv->finger_state >= FS_TOUCHED)
++        return TRUE;
++
+     if ((priv->synpara.area_left_edge != 0) &&
+         (x < priv->synpara.area_left_edge))
+         inside_area = FALSE;
+@@ -2835,13 +2840,9 @@ HandleState(InputInfoPtr pInfo, struct SynapticsHwState *hw, CARD32 now,
+        invalid are: x, y, z, numFingers, fingerWidth
+        valid are: millis, left/right/middle/up/down/etc.
+      */
+-    if (!inside_active_area) {
++    if (!inside_active_area)
+         reset_hw_state(hw);
+ 
+-        /* FIXME: if finger accidentally moves into the area and doesn't
+-         * really release, the finger should remain down. */
+-    }
+-
+     /* no edge or finger detection outside of area */
+     if (inside_active_area) {
+         edge = edge_detection(priv, hw->x, hw->y);
+-- 
+1.9.3
+

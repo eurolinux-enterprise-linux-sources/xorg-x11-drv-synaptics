@@ -1,0 +1,187 @@
+From 62774df2797abee123fd0a9960a5fb147753773e Mon Sep 17 00:00:00 2001
+From: Benjamin Tissoires <benjamin.tissoires@redhat.com>
+Date: Thu, 20 Feb 2014 13:13:18 -0500
+Subject: [PATCH synaptics 03/14] Add secondary (top) software buttons area
+
+New generation of laptops with trackstick do not have physical buttons
+associated with the trackstick, but instead rely on software buttons at
+the top of the clickpad.
+Adding a secondary software button area for this purpose.
+As we're likely detecting the devices that need it based on udev tags
+and MatchTag configuration items, this area doesn't need to be exposed
+through properties. So static configuration is fine.
+
+Signed-off-by: Benjamin Tissoires <benjamin.tissoires@redhat.com>
+Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+[couple of man-page additions and rewrites]
+
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+(cherry picked from commit 402cc872570b58b8420e7973d0706f3b2a2aaf91)
+(cherry picked from commit 13fc982c670e992060fd33a116fbc6eb32cdba25)
+---
+ man/synaptics.man  | 18 ++++++++++++++++++
+ src/synaptics.c    | 47 ++++++++++++++++++++++++++++++++++++++++-------
+ src/synapticsstr.h |  2 +-
+ 3 files changed, 59 insertions(+), 8 deletions(-)
+
+diff --git a/man/synaptics.man b/man/synaptics.man
+index 93c0627..a80aaad 100644
+--- a/man/synaptics.man
++++ b/man/synaptics.man
+@@ -447,6 +447,18 @@ soft button areas. Button areas may not overlap, however it is permitted for two
+ buttons to share an edge value.
+ Property: "Synaptics Soft Button Areas"
+ .
++.TP
++.BI "Option \*qSecondarySoftButtonAreas\*q \*q" "RBL RBR RBT RBB MBL MBR MBT MBB" \*q
++This option is only available on ClickPad devices.
++Enable secondary soft button click area support on ClickPad devices (usually on
++top of the device).
++For the allowed values for this option, see
++.B Option \*qSoftButtonAreas\*q.
++Primary and secondary soft button areas must not overlap each other. If they do,
++the behavior of the driver is undefined.
++No property associated, this option must be set in the
++__xconfigfile__(__filemansuffix__).
++.
+ 
+ .SH CONFIGURATION DETAILS
+ .SS Area handling
+@@ -669,6 +681,12 @@ ClickPads provide software emulated buttons through
+ These buttons enable areas on the touchpad to perform as right or middle
+ mouse button. When the user performs a click within a defined soft button
+ area, a right or middle click is performed.
++.LP
++Some laptops, most notably the Lenovo T440, T540 and x240 series, provide a
++pointing stick without physical buttons. On those laptops, the top of the
++touchpad acts as software-emulated button area. This area can be configured
++with
++.B Option SecondarySoftButtonAreas.
+ 
+ .SH "DEVICE PROPERTIES"
+ Synaptics 1.0 and higher support input device properties if the driver is
+diff --git a/src/synaptics.c b/src/synaptics.c
+index bc4f24c..7405194 100644
+--- a/src/synaptics.c
++++ b/src/synaptics.c
+@@ -452,7 +452,7 @@ SynapticsIsSoftButtonAreasValid(int *values)
+ }
+ 
+ static void
+-set_softbutton_areas_option(InputInfoPtr pInfo)
++set_softbutton_areas_option(InputInfoPtr pInfo, char *option_name, int offset)
+ {
+     SynapticsPrivate *priv = pInfo->private;
+     SynapticsParameters *pars = &priv->synpara;
+@@ -467,7 +467,7 @@ set_softbutton_areas_option(InputInfoPtr pInfo)
+     if (!pars->clickpad)
+         return;
+ 
+-    option_string = xf86SetStrOption(pInfo->options, "SoftButtonAreas", NULL);
++    option_string = xf86SetStrOption(pInfo->options, option_name, NULL);
+     if (!option_string)
+         return;
+ 
+@@ -512,8 +512,8 @@ set_softbutton_areas_option(InputInfoPtr pInfo)
+     if (!SynapticsIsSoftButtonAreasValid(values))
+         goto fail;
+ 
+-    memcpy(pars->softbutton_areas[0], values, 4 * sizeof(int));
+-    memcpy(pars->softbutton_areas[1], values + 4, 4 * sizeof(int));
++    memcpy(pars->softbutton_areas[offset], values, 4 * sizeof(int));
++    memcpy(pars->softbutton_areas[offset + 1], values + 4, 4 * sizeof(int));
+ 
+     free(option_string);
+ 
+@@ -521,12 +521,24 @@ set_softbutton_areas_option(InputInfoPtr pInfo)
+ 
+  fail:
+     xf86IDrvMsg(pInfo, X_ERROR,
+-                "invalid SoftButtonAreas value '%s', keeping defaults\n",
+-                option_string);
++                "invalid %s value '%s', keeping defaults\n",
++                option_name, option_string);
+     free(option_string);
+ }
+ 
+ static void
++set_primary_softbutton_areas_option(InputInfoPtr pInfo)
++{
++	set_softbutton_areas_option(pInfo, "SoftButtonAreas", 0);
++}
++
++static void
++set_secondary_softbutton_areas_option(InputInfoPtr pInfo)
++{
++	set_softbutton_areas_option(pInfo, "SecondarySoftButtonAreas", 2);
++}
++
++static void
+ set_default_parameters(InputInfoPtr pInfo)
+ {
+     SynapticsPrivate *priv = pInfo->private;    /* read-only */
+@@ -724,7 +736,8 @@ set_default_parameters(InputInfoPtr pInfo)
+                     "TopEdge is bigger than BottomEdge. Fixing.\n");
+     }
+ 
+-    set_softbutton_areas_option(pInfo);
++    set_primary_softbutton_areas_option(pInfo);
++    set_secondary_softbutton_areas_option(pInfo);
+ }
+ 
+ static double
+@@ -1429,6 +1442,18 @@ is_inside_middlebutton_area(SynapticsParameters * para, int x, int y)
+     return is_inside_button_area(para, 1, x, y);
+ }
+ 
++static Bool
++is_inside_sec_rightbutton_area(SynapticsParameters * para, int x, int y)
++{
++    return is_inside_button_area(para, 2, x, y);
++}
++
++static Bool
++is_inside_sec_middlebutton_area(SynapticsParameters * para, int x, int y)
++{
++    return is_inside_button_area(para, 3, x, y);
++}
++
+ static CARD32
+ timerFunc(OsTimerPtr timer, CARD32 now, pointer arg)
+ {
+@@ -2584,10 +2609,18 @@ update_hw_button_state(const InputInfoPtr pInfo, struct SynapticsHwState *hw,
+                     hw->left = 0;
+                     hw->right = 1;
+                 }
++                else if (is_inside_sec_rightbutton_area(para, hw->x, hw->y)) {
++                    hw->left = 0;
++                    hw->right = 1;
++                }
+                 else if (is_inside_middlebutton_area(para, hw->x, hw->y)) {
+                     hw->left = 0;
+                     hw->middle = 1;
+                 }
++                else if (is_inside_sec_middlebutton_area(para, hw->x, hw->y)) {
++                    hw->left = 0;
++                    hw->middle = 1;
++                }
+         }
+         else if (hw->left) {
+             hw->left = old->left;
+diff --git a/src/synapticsstr.h b/src/synapticsstr.h
+index 3d6f756..ead54d4 100644
+--- a/src/synapticsstr.h
++++ b/src/synapticsstr.h
+@@ -194,7 +194,7 @@ typedef struct _SynapticsParameters {
+     unsigned int resolution_horiz;      /* horizontal resolution of touchpad in units/mm */
+     unsigned int resolution_vert;       /* vertical resolution of touchpad in units/mm */
+     int area_left_edge, area_right_edge, area_top_edge, area_bottom_edge;       /* area coordinates absolute */
+-    int softbutton_areas[2][4]; /* soft button area coordinates, 0 => right, 1 => middle button */
++    int softbutton_areas[4][4]; /* soft button area coordinates, 0 => right, 1 => middle , 2 => secondary right, 3 => secondary middle button */
+     int hyst_x, hyst_y;         /* x and y width of hysteresis box */
+ } SynapticsParameters;
+ 
+-- 
+1.9.3
+

@@ -51,7 +51,7 @@
 /* 8 bit (BOOL) */
 #define SYNAPTICS_PROP_CLICKPAD "Synaptics ClickPad"
 
-/* 8 bit (BOOL), <deprecated> */
+/* 8 bit (BOOL) */
 #define SYNAPTICS_PROP_TAP_FAST "Synaptics Tap FastTap"
 
 /* 32 bit */
@@ -116,9 +116,6 @@
 #define SYNAPTICS_PROP_CIRCULAR_SCROLLING_TRIGGER "Synaptics Circular Scrolling Trigger"
 
 /* 8 bit (BOOL) */
-#define SYNAPTICS_PROP_CIRCULAR_PAD "Synaptics Circular Pad"
-
-/* 8 bit (BOOL) */
 #define SYNAPTICS_PROP_PALM_DETECT "Synaptics Palm Detection"
 
 /* 32 bit, 2 values, width, z */
@@ -151,9 +148,6 @@
 
 /* 32 bit, 4 values, left, right, top, buttom */
 #define SYNAPTICS_PROP_SOFTBUTTON_AREAS "Synaptics Soft Button Areas"
-
-/* 32 bit, 4 values, left, right, top, buttom */
-#define SYNAPTICS_PROP_SECONDARY_SOFTBUTTON_AREAS "Synaptics Secondary Soft Button Areas"
 
 /* 32 Bit Integer, 2 values, horizontal hysteresis, vertical hysteresis */
 #define SYNAPTICS_PROP_NOISE_CANCELLATION "Synaptics Noise Cancellation"

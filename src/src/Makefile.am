@@ -48,8 +48,7 @@ if BUILD_EVENTCOMM
 synaptics_drv_la_SOURCES += \
 	eventcomm.c eventcomm.h
 synaptics_drv_la_LIBADD = \
-	$(LIBEVDEV_LIBS)
-AM_CPPFLAGS += $(LIBEVDEV_CFLAGS)
+	$(MTDEV_LIBS)
 endif
 
 if BUILD_PSMCOMM

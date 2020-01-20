@@ -1,0 +1,37 @@
+From 5a2ed1e91a488b8009ce6cb870cea3205d73bdaf Mon Sep 17 00:00:00 2001
+From: Stephen Chandler Paul <thatslyude@gmail.com>
+Date: Mon, 10 Mar 2014 18:33:20 -0400
+Subject: [PATCH synaptics 12/14] Don't allow any type of movement starting in
+ the top softbutton area
+
+Clicking in the top soft button area causes the trackpad to begin
+registering motion, even if the finger never leaves the top soft button
+area. We don't want this kind of behavior for the top soft button area,
+since it makes clicking and dragging items much more difficult when
+using a pointing stick.
+
+Signed-off-by: Stephen Chandler Paul <thatslyude@gmail.com>
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+(cherry picked from commit b40a5255fe73f7f95c8ff7145dd91605f3430119)
+(cherry picked from commit ed84731b72692c648b48d00b84bb680446e265b6)
+---
+ src/synaptics.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/synaptics.c b/src/synaptics.c
+index c3bda7b..512ca8d 100644
+--- a/src/synaptics.c
++++ b/src/synaptics.c
+@@ -2904,7 +2904,8 @@ HandleState(InputInfoPtr pInfo, struct SynapticsHwState *hw, CARD32 now,
+ 
+     /* If a physical button is pressed on a clickpad, use cumulative relative
+      * touch movements for motion */
+-    if (para->clickpad && (hw->left || hw->right || hw->middle)) {
++    if (para->clickpad && (priv->lastButtons & 7) &&
++        priv->last_button_area != TOP_BUTTON_AREA) {
+         hw->x = hw->cumulative_dx;
+         hw->y = hw->cumulative_dy;
+         using_cumulative_coords = TRUE;
+-- 
+1.9.3
+

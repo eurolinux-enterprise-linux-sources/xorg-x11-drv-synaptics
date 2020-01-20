@@ -1,0 +1,113 @@
+From 662a51761e4f4a64cd1dcdf489ad0ccb708185f2 Mon Sep 17 00:00:00 2001
+From: Peter Hutterer <peter.hutterer@who-t.net>
+Date: Thu, 20 Mar 2014 11:51:17 +1000
+Subject: [PATCH synaptics 01/14] Avoid erroneously handling two touchpoints in
+ the same slot
+
+If a slot's ABS_MT_TRACKING_ID event was received during SYN_DROPPED, the
+driver isn't aware that a touchpoint has started or ended in that slot. When
+the next ABS_MT_TRACKING_ID event arrives, the driver would unconditionally
+close or open a new touchpoint. This could lead to two or more touchpoints
+being opened in the same slot, the first of which is never terminated.
+Or it could lead to a touchpoint being terminated that was never opened.
+
+The event sequences that trigger this are:
+    ABS_MT_TRACKING_ID 83
+    ABS_MT_TRACKING_ID -1
+    SYN_DROPPED             // new touchpoint started here
+    ABS_MT_TRACKING_ID -1
+
+and
+
+    ABS_MT_TRACKING_ID 83
+    SYN_DROPPED             // touchpoint ended here
+    ABS_MT_TRACKING_ID 84
+    ABS_MT_TRACKING_ID -1
+
+We don't properly handle SYN_DROPPED, but we can avoid this by only starting a
+new touchpoint when we transition between -1 and a valid tracking ID.
+
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+---
+ src/eventcomm.c | 34 +++++++++++++++++++++++++++++++++-
+ 1 file changed, 33 insertions(+), 1 deletion(-)
+
+diff --git a/src/eventcomm.c b/src/eventcomm.c
+index 258a538..3c2883e 100644
+--- a/src/eventcomm.c
++++ b/src/eventcomm.c
+@@ -76,6 +76,7 @@ struct eventcomm_proto_data {
+     int cur_slot;
+     ValuatorMask **last_mt_vals;
+     int num_touches;
++    int *tracking_ids;
+ };
+ 
+ struct eventcomm_proto_data *
+@@ -125,6 +126,9 @@ UninitializeTouch(InputInfoPtr pInfo)
+     mtdev_close_delete(proto_data->mtdev);
+     proto_data->mtdev = NULL;
+     proto_data->num_touches = 0;
++
++    free(proto_data->tracking_ids);
++    proto_data->tracking_ids = NULL;
+ }
+ 
+ static void
+@@ -156,9 +160,18 @@ InitializeTouch(InputInfoPtr pInfo)
+         return;
+     }
+ 
++    proto_data->tracking_ids = calloc(priv->num_slots, sizeof(int));
++    if (!proto_data->tracking_ids) {
++        xf86IDrvMsg(pInfo, X_WARNING, "failed to allocate tracking ID array\n");
++        UninitializeTouch(pInfo);
++        return;
++    }
++
+     for (i = 0; i < priv->num_slots; i++) {
+         int j;
+ 
++        proto_data->tracking_ids[i] = -1;
++
+         proto_data->last_mt_vals[i] = valuator_mask_new(4 + priv->num_mt_axes);
+         if (!proto_data->last_mt_vals[i]) {
+             xf86IDrvMsg(pInfo, X_WARNING,
+@@ -554,7 +567,24 @@ EventProcessTouchEvent(InputInfoPtr pInfo, struct SynapticsHwState *hw,
+         if (hw->slot_state[slot_index] == SLOTSTATE_OPEN_EMPTY)
+             hw->slot_state[slot_index] = SLOTSTATE_UPDATE;
+         if (ev->code == ABS_MT_TRACKING_ID) {
+-            if (ev->value >= 0) {
++            int old_tracking_id = proto_data->tracking_ids[slot_index];
++
++            /* We don't have proper SYN_DROPPED handling in
++               synaptics < 1.8. This is a poor man's version that covers the
++               worst bug we're seeing: touch points starting/stopping during
++               SYN_DROPPED. There can only be one touchpoint per slot,
++               identified by the tracking ID. Make sure that we only ever
++               have a single touch point open per slot.
++             */
++            if (ev->value != -1 && old_tracking_id != -1) {
++                /* Our touch terminated during SYN_DROPPED, now we have a
++                   new touch starting in the same slot but ours is still
++                   open. Do nothing, just continue with the old touch */
++            } else if (ev->value == -1 && old_tracking_id == -1) {
++                /* A new touch started during SYN_DROPPED, now we have that
++                   touch terminating. Do nothing, we don't have that touch
++                   open */
++            } else if (ev->value >= 0) {
+                 hw->slot_state[slot_index] = SLOTSTATE_OPEN;
+                 proto_data->num_touches++;
+                 valuator_mask_copy(hw->mt_mask[slot_index],
+@@ -564,6 +594,8 @@ EventProcessTouchEvent(InputInfoPtr pInfo, struct SynapticsHwState *hw,
+                 hw->slot_state[slot_index] = SLOTSTATE_CLOSE;
+                 proto_data->num_touches--;
+             }
++
++            proto_data->tracking_ids[slot_index] = ev->value;
+         }
+         else {
+             ValuatorMask *mask = proto_data->last_mt_vals[slot_index];
+-- 
+1.9.3
+
