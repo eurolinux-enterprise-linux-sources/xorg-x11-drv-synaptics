@@ -7,7 +7,7 @@
 
 Name:           xorg-x11-drv-synaptics
 Summary:        Xorg X11 Synaptics touchpad input driver
-Version:        1.8.2
+Version:        1.9.0
 Release:        1%{?gitdate:.%{gitdate}git%{gitversion}}%{?dist}
 URL:            http://www.x.org
 License:        MIT
@@ -22,8 +22,6 @@ Source0:        ftp://ftp.x.org/pub/individual/driver/%{tarball}-%{version}.tar.
 %endif
 Source3:        50-synaptics.conf
 Source4:        70-touchpad-quirks.rules
-
-Patch01:        0001-Limit-the-movement-to-20-mm-per-event.patch
 
 ExcludeArch:    s390 s390x
 
@@ -82,7 +80,6 @@ Features:
 
 %prep
 %setup -q -n %{tarball}-%{?gitdate:%{gitdate}}%{!?gitdate:%{version}}
-%patch01 -p1
 
 %build
 autoreconf -v --install --force || exit 1
@@ -97,6 +94,9 @@ make install DESTDIR=$RPM_BUILD_ROOT
 # FIXME: Remove all libtool archives (*.la) from modules directory.  This
 # should be fixed in upstream Makefile.am or whatever.
 find $RPM_BUILD_ROOT -regex ".*\.la$" | xargs rm -f --
+
+# we keep shipping our own config file
+rm -f $RPM_BUILD_ROOT%{_datadir}/X11/xorg.conf.d/70-synaptics.conf
 
 install -d $RPM_BUILD_ROOT%{_datadir}/X11/xorg.conf.d
 install -m 0644 %{SOURCE3} $RPM_BUILD_ROOT%{_datadir}/X11/xorg.conf.d/50-synaptics.conf
@@ -138,6 +138,9 @@ Development files for the Synaptics TouchPad for X.Org.
 
 
 %changelog
+* Fri Jan 27 2017 Peter Hutterer <peter.hutterer@redhat.com> 1.9.0-1
+- synaptics 1.9.0 (#1401659)
+
 * Fri May 01 2015 Peter Hutterer <peter.hutterer@redhat.com> 1.8.2-1
 - synaptics 1.8.2 (#1194883)
 
