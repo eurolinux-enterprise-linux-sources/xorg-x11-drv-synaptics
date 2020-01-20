@@ -1,0 +1,48 @@
+From dd24bbe4bbffc5e711edd4ff81bd0fff668525a2 Mon Sep 17 00:00:00 2001
+From: Hans de Goede <hdegoede@redhat.com>
+Date: Fri, 11 Apr 2014 20:41:36 +0200
+Subject: [PATCH synaptics] Always count tripletap + click as 3 fingerclick on
+ pads with < 3 touches
+
+When trying to do a 3 fingerclick on a touchpad which only tracks 2 touches,
+this may register as a 3 or 2 fingerclick depending on the order in which
+the touchpad detects the fingers. If the 2 outer fingers of the 3 get seen
+first, then the 2 touches will be too far apart for the heuristic to see
+them as being close together, and the click gets counted as a 2 finger click.
+
+A user will likely never do a 2 finger click with a 3th finger resting
+somewhere else on the pad, where-as the above misdetection of the clicks is
+a real issue, so simply always count a click with trippletap set as a
+3 finger click on pads which track less then 3 touches.
+
+https://bugzilla.redhat.com/show_bug.cgi?id=1086218
+
+Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+(cherry picked from commit a6f0f4c9a5bcb0e25343dd4c59d4cc47cc5e8006)
+---
+ src/synaptics.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/src/synaptics.c b/src/synaptics.c
+index 68705e7..f5f3251 100644
+--- a/src/synaptics.c
++++ b/src/synaptics.c
+@@ -2591,6 +2591,13 @@ clickpad_guess_clickfingers(SynapticsPrivate * priv,
+         close_point >>= 1;
+     }
+ 
++    /* Some trackpads touchpad only track two touchpoints but announce
++     * BTN_TOOL_TRIPLETAP (which sets hw->numFingers to 3), when this happens
++     * the user likely intents to do a 3 finger click, so handle it as such.
++     */
++    if (hw->numFingers >= 3 && hw->num_mt_mask < 3)
++        nfingers = 3;
++
+     return nfingers;
+ }
+ 
+-- 
+1.9.3
+

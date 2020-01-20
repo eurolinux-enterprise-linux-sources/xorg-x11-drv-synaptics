@@ -1,0 +1,98 @@
+From 6174790eed24d45312fee9bf6e0b46aa2ee83c48 Mon Sep 17 00:00:00 2001
+From: Peter Hutterer <peter.hutterer@who-t.net>
+Date: Thu, 28 Aug 2014 14:13:38 +1000
+Subject: [PATCH synaptics] eventcomm: ensure we're on the same clock as the
+ server
+
+Default on evdev devices is CLOCK_REALTIME. If that clock falls behind the
+server's CLOCK_MONOTONIC, motion after a clickpad click may be delayed by the
+difference in the clocks.
+
+In detail:
+When the timer func is triggered, GetTimeInMillis() which is CLOCK_MONOTONIC,
+is stored as hwState->millis. The eventcomm backend uses struct
+input_event time (CLOCK_REALTIME).
+
+When we read events from the device, if the evdev time is less than the server
+time, the fix for (#48777) sets the current event time to hwState->millis.
+Until the evdev time overtakes that stored time, all events have the
+hwState->millis time.
+
+If during that time a clickpad triggers a physical click,
+clickpad_click_millis is set to hwState->millis + the ignore-motion timeout.
+Thus, all motion is ignored until the event time overtakes that stored
+time.
+
+The whole issue is further enhanced by us unconditionally setting the timer
+func if we get any events, which is a separate issue anyway.
+
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+(cherry-picked from commit 90d19302306f49722e210227b2fb5161e6f51880)
+
+(cherry picked from commit 7d958088a354d5a7969448f014f3620b59c7e4da)
+---
+ src/eventcomm.c | 17 ++++++++++++++---
+ 1 file changed, 14 insertions(+), 3 deletions(-)
+
+diff --git a/src/eventcomm.c b/src/eventcomm.c
+index a66c6b0..2e45c2b 100644
+--- a/src/eventcomm.c
++++ b/src/eventcomm.c
+@@ -39,6 +39,7 @@
+ #include <dirent.h>
+ #include <string.h>
+ #include <stdio.h>
++#include <time.h>
+ #include "synproto.h"
+ #include "synapticsstr.h"
+ #include <xf86.h>
+@@ -80,6 +81,8 @@ struct eventcomm_proto_data {
+     ValuatorMask **last_mt_vals;
+     int num_touches;
+     int *tracking_ids;
++
++    int have_monotonic_clock;
+ };
+ 
+ struct eventcomm_proto_data *
+@@ -198,11 +201,11 @@ EventDeviceOnHook(InputInfoPtr pInfo, SynapticsParameters * para)
+     SynapticsPrivate *priv = (SynapticsPrivate *) pInfo->private;
+     struct eventcomm_proto_data *proto_data =
+         (struct eventcomm_proto_data *) priv->proto_data;
++    int clockid = CLOCK_MONOTONIC;
++    int ret;
+ 
+     if (para->grab_event_device) {
+         /* Try to grab the event device so that data don't leak to /dev/input/mice */
+-        int ret;
+-
+         SYSCALL(ret = ioctl(pInfo->fd, EVIOCGRAB, (pointer) 1));
+         if (ret < 0) {
+             xf86IDrvMsg(pInfo, X_WARNING, "can't grab event device, errno=%d\n",
+@@ -213,6 +216,11 @@ EventDeviceOnHook(InputInfoPtr pInfo, SynapticsParameters * para)
+ 
+     proto_data->need_grab = FALSE;
+ 
++#ifdef EVIOCSCLOCKID
++    SYSCALL(ret = ioctl(pInfo->fd, EVIOCSCLOCKID, &clockid));
++    proto_data->have_monotonic_clock = (ret == 0);
++#endif
++
+     InitializeTouch(pInfo);
+ 
+     return TRUE;
+@@ -681,7 +689,10 @@ EventReadHwState(InputInfoPtr pInfo,
+             switch (ev.code) {
+             case SYN_REPORT:
+                 hw->numFingers = count_fingers(pInfo, comm);
+-                hw->millis = 1000 * ev.time.tv_sec + ev.time.tv_usec / 1000;
++                if (proto_data->have_monotonic_clock)
++                    hw->millis = 1000 * ev.time.tv_sec + ev.time.tv_usec / 1000;
++                else
++                    hw->millis = GetTimeInMillis();
+                 SynapticsCopyHwState(hwRet, hw);
+                 return TRUE;
+             }
+-- 
+1.9.3
+

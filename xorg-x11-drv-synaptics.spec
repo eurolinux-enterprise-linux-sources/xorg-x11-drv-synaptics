@@ -8,7 +8,7 @@
 Name:           xorg-x11-drv-synaptics
 Summary:        Xorg X11 Synaptics touchpad input driver
 Version:        1.7.1
-Release:        10%{?gitdate:.%{gitdate}git%{gitversion}}%{?dist}.1
+Release:        13%{?gitdate:.%{gitdate}git%{gitversion}}%{?dist}
 URL:            http://www.x.org
 License:        MIT
 Group:          User Interface/X Hardware Support
@@ -41,6 +41,10 @@ Patch14:        0011-Replace-is_inside_anybutton_area-with-current_button.patch
 Patch15:        0012-Don-t-allow-any-type-of-movement-starting-in-the-top.patch
 Patch16:        0013-If-the-touchpad-is-in-TOUCHPAD_OFF-mode-allow-physic.patch
 Patch17:        0014-Add-support-for-INPUT_PROP_TOPBUTTONPAD.patch
+# Bug 1123297 - middle-click not supported by gesture on T440
+Patch18:        0001-Always-count-tripletap-click-as-3-fingerclick-on-pad.patch
+# Bug 1138484 - Clickpad clicks are delayed when clocks drift apart
+Patch19:        0001-eventcomm-ensure-we-re-on-the-same-clock-as-the-serv.patch
 
 ExcludeArch:    s390 s390x
 
@@ -115,6 +119,8 @@ Features:
 %patch15 -p1
 %patch16 -p1
 %patch17 -p1
+%patch18 -p1
+%patch19 -p1
 
 %build
 autoreconf -v --install --force || exit 1
@@ -170,8 +176,14 @@ Development files for the Synaptics TouchPad for X.Org.
 
 
 %changelog
-* Wed Jul 23 2014 Peter Hutterer <peter.hutterer@redhat.com> 1.7.1-10.1
-- Add support for secondary software button areas (#1122130)
+* Wed Sep 10 2014 Peter Hutterer <peter.hutterer@redhat.com> 1.7.1-13
+- Avoid click delays when clocks drift apart (#1138484)
+
+* Thu Aug 14 2014 Peter Hutterer <peter.hutterer@redhat.com> 1.7.1-12
+- Fix 3-finger click on clickpads (#1123297)
+
+* Thu Jul 17 2014 Peter Hutterer <peter.hutterer@redhat.com> 1.7.1-11
+- Add support for secondary software button areas (#1093050)
 
 * Wed Jan 15 2014 Adam Jackson <ajax@redhat.com> - 1.7.1-10
 - 1.15 ABI rebuild
