@@ -8,7 +8,7 @@
 Name:           xorg-x11-drv-synaptics
 Summary:        Xorg X11 Synaptics touchpad input driver
 Version:        1.9.0
-Release:        1%{?gitdate:.%{gitdate}git%{gitversion}}%{?dist}
+Release:        2%{?gitdate:.%{gitdate}git%{gitversion}}%{?dist}
 URL:            http://www.x.org
 License:        MIT
 Group:          User Interface/X Hardware Support
@@ -22,6 +22,8 @@ Source0:        ftp://ftp.x.org/pub/individual/driver/%{tarball}-%{version}.tar.
 %endif
 Source3:        50-synaptics.conf
 Source4:        70-touchpad-quirks.rules
+
+Patch01:        0001-eventcomm-if-we-get-a-read-error-other-than-EAGAIN-r.patch
 
 ExcludeArch:    s390 s390x
 
@@ -80,6 +82,7 @@ Features:
 
 %prep
 %setup -q -n %{tarball}-%{?gitdate:%{gitdate}}%{!?gitdate:%{version}}
+%patch01 -p1 
 
 %build
 autoreconf -v --install --force || exit 1
@@ -138,6 +141,9 @@ Development files for the Synaptics TouchPad for X.Org.
 
 
 %changelog
+* Tue May 15 2018 Peter Hutterer <peter.hutterer@redhat.com> 1.9.0-2
+- Fix infinite log spam in case of read errors (#1564624).
+
 * Fri Jan 27 2017 Peter Hutterer <peter.hutterer@redhat.com> 1.9.0-1
 - synaptics 1.9.0 (#1401659)
 
